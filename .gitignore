@@ -1,0 +1,63 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+/dist
+
+# misc
+.DS_Store
+*.pem
+*.log
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+
+# temp files
+/tmp
+/scripts
+
+# utility scripts (contain credential references)
+add-iam-permissions.js
+check-account-settings.js
+check-s3-config.js
+fix-s3-permissions.js
+
+# sync
+.unison/
+
+# macOS volume metadata
+.Trashes
+.fseventsd
+.Spotlight-V100
