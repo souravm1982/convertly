@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Convertly : Convert your images to Reels",
-  description: "A Next.js app with React frontend and Node.js API backend",
+  title: "Convertly — Convert your images to Reels",
+  description: "AI-powered tool to create stunning reels and photo sets from your images.",
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="font-sans">{children}</body>
     </html>
   );
 }

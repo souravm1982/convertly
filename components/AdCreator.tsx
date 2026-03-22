@@ -1,0 +1,270 @@
+"use client";
+
+import { useState, useRef } from "react";
+
+interface Product {
+  id: number;
+  title: string;
+  description: string;
+  price: string;
+  compareAtPrice: string | null;
+  image: string;
+  images: string[];
+  vendor: string;
+  productType: string;
+  tags: string[];
+  handle: string;
+  url: string;
+}
+
+interface AdCopy {
+  headline: string;
+  subheadline: string;
+  cta: string;
+  description: string;
+}
+
+interface GeneratedAd {
+  url: string;
+  s3Key: string;
+  template: string;
+}
+
+const TEMPLATES = [
+  { id: "product-showcase", label: "Product Showcase", emoji: "✨", desc: "Clean centered layout" },
+  { id: "sale-banner", label: "Sale Banner", emoji: "🔥", desc: "Bold promotional style" },
+  { id: "lifestyle", label: "Lifestyle", emoji: "🌿", desc: "Aspirational mood" },
+  { id: "minimal", label: "Minimal", emoji: "◻️", desc: "Clean white background" },
+];
+
+export default function AdCreator() {
+  const [storeUrl, setStoreUrl] = useState("");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productCount, setProductCount] = useState(0);
+  const [scraping, setScraping] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState("product-showcase");
+  const [adCopy, setAdCopy] = useState<AdCopy | null>(null);
+  const [generatingCopy, setGeneratingCopy] = useState(false);
+  const [generatedAds, setGeneratedAds] = useState<GeneratedAd[]>([]);
+  const [generatingAd, setGeneratingAd] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleScrape = async () => {
+    if (!storeUrl.trim()) return;
+    setScraping(true); setError(null); setProducts([]); setSelectedProduct(null); setAdCopy(null); setGeneratedAds([]); setSearchQuery("");
+    try {
+      const res = await fetch("/api/scrape-store", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: storeUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.details || data.error);
+      setProducts(data.products);
+      setProductCount(data.productCount);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to scrape store");
+    } finally { setScraping(false); }
+  };
+
+  const adBuilderRef = useRef<HTMLDivElement>(null);
+
+  const handleSelectProduct = async (product: Product) => {
+    setSelectedProduct(product);
+    setAdCopy(null); setGeneratedAds([]);
+    setGeneratingCopy(true); setError(null);
+    setTimeout(() => adBuilderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    try {
+      const res = await fetch("/api/generate-ad-copy", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product, template: selectedTemplate }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.details || data.error);
+      setAdCopy(data.adCopy);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate ad copy");
+    } finally { setGeneratingCopy(false); }
+  };
+
+  const handleGenerateAd = async () => {
+    if (!selectedProduct || !adCopy) return;
+    setGeneratingAd(true); setError(null);
+    try {
+      const res = await fetch("/api/generate-ad", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product: selectedProduct, adCopy, template: selectedTemplate }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.details || data.error);
+      setGeneratedAds([data.image, ...generatedAds]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate ad");
+    } finally { setGeneratingAd(false); }
+  };
+
+  const handleDownload = (ad: GeneratedAd) => {
+    const a = document.createElement("a");
+    a.href = `/api/download-image?key=${encodeURIComponent(ad.s3Key)}&filename=ad-${ad.template}.png`;
+    a.download = `ad-${ad.template}.png`;
+    a.click();
+  };
+
+  const filteredProducts = products.filter(p =>
+    !searchQuery || p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center mb-2">
+        <h2 className="text-2xl font-bold text-gray-900">Ad Creator</h2>
+        <p className="text-gray-500 mt-1">Paste a Shopify store URL, pick a product, generate stunning ads.</p>
+      </div>
+
+      {/* Store URL */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Shopify Store URL</label>
+        <div className="flex gap-3">
+          <input
+            type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)}
+            placeholder="e.g. mystore.myshopify.com or mystore.com"
+            onKeyDown={(e) => e.key === "Enter" && handleScrape()}
+            className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-200 focus:border-violet-300 outline-none"
+          />
+          <button onClick={handleScrape} disabled={scraping || !storeUrl.trim()}
+            className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-3 px-6 rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all whitespace-nowrap">
+            {scraping ? "Scanning..." : "Scan Store"}
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
+
+      {/* Products Grid */}
+      {products.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-gray-900">{productCount} Products Found</h3>
+            <input
+              type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search products..."
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none w-48"
+            />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {filteredProducts.map((p) => (
+              <div key={p.id} onClick={() => handleSelectProduct(p)}
+                className={`cursor-pointer rounded-xl border p-3 transition-all ${selectedProduct?.id === p.id ? "ring-2 ring-violet-500 border-violet-200 bg-violet-50/50" : "border-gray-100 hover:border-gray-200"}`}>
+                {p.image && <img src={p.image} alt={p.title} className="w-full aspect-square object-contain rounded-lg bg-gray-50 mb-2" />}
+                <p className="text-sm font-semibold text-gray-800 truncate">{p.title}</p>
+                <p className="text-sm text-violet-600 font-bold">${p.price}</p>
+                {p.compareAtPrice && <p className="text-xs text-gray-400 line-through">${p.compareAtPrice}</p>}
+                {p.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {p.tags.slice(0, 2).map((t, i) => (
+                      <span key={i} className="text-[10px] bg-gray-50 text-gray-400 px-1.5 py-0.5 rounded">{t}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Ad Builder */}
+      {selectedProduct && (
+        <div ref={adBuilderRef} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Build Ad for: {selectedProduct.title}</h3>
+            <a href={selectedProduct.url} target="_blank" rel="noopener noreferrer" className="text-xs text-violet-500 hover:underline">{selectedProduct.url}</a>
+            {selectedProduct.description && (
+              <p className="text-xs text-gray-400 mt-1 line-clamp-2">{selectedProduct.description}</p>
+            )}
+          </div>
+
+          {/* Template Picker */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Template</label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {TEMPLATES.map((t) => (
+                <button key={t.id} onClick={() => setSelectedTemplate(t.id)}
+                  className={`p-3 rounded-xl border text-left transition-all ${selectedTemplate === t.id ? "ring-2 ring-violet-500 border-violet-200 bg-violet-50" : "border-gray-100 hover:border-gray-200"}`}>
+                  <span className="text-lg">{t.emoji}</span>
+                  <p className="text-sm font-semibold text-gray-800 mt-1">{t.label}</p>
+                  <p className="text-xs text-gray-400">{t.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Ad Copy Editor */}
+          {generatingCopy ? (
+            <div className="text-center py-6">
+              <div className="inline-flex items-center gap-2 text-violet-600 animate-pulse font-medium">
+                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                Generating ad copy...
+              </div>
+            </div>
+          ) : adCopy && (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">Ad Copy (editable)</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500">Headline</label>
+                  <input value={adCopy.headline} onChange={(e) => setAdCopy({ ...adCopy, headline: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Subheadline</label>
+                  <input value={adCopy.subheadline} onChange={(e) => setAdCopy({ ...adCopy, subheadline: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">CTA Button</label>
+                  <input value={adCopy.cta} onChange={(e) => setAdCopy({ ...adCopy, cta: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Description</label>
+                  <input value={adCopy.description} onChange={(e) => setAdCopy({ ...adCopy, description: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
+                </div>
+              </div>
+              <button onClick={handleGenerateAd} disabled={generatingAd}
+                className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-3 rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all">
+                {generatingAd ? "Generating Ad..." : "🎨 Generate Ad Image"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Generated Ads */}
+      {generatedAds.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Generated Ads</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {generatedAds.map((ad, i) => (
+              <div key={i} className="rounded-xl border border-gray-100 p-3">
+                <img src={ad.url} alt={`Ad ${i + 1}`} className="w-full aspect-square object-contain rounded-lg bg-gray-50" />
+                <div className="flex gap-2 mt-3">
+                  <button onClick={() => handleDownload(ad)}
+                    className="flex-1 bg-gray-900 text-white text-sm font-semibold py-2 rounded-lg hover:bg-gray-800 transition-all">
+                    ⬇ Download
+                  </button>
+                  <button onClick={handleGenerateAd} disabled={generatingAd}
+                    className="flex-1 bg-violet-100 text-violet-700 text-sm font-semibold py-2 rounded-lg hover:bg-violet-200 transition-all disabled:opacity-50">
+                    🔄 New Variation
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

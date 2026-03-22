@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { s3Client, BUCKET_NAME, getPresignedUrl } from '@/lib/s3';
 import { Readable } from 'stream';
 import { writeFile, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { tmpdir } from 'os';
 
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+
 
 async function downloadFromS3(bucket: string, key: string): Promise<Buffer> {
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
@@ -106,7 +101,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+    const bucketName = BUCKET_NAME;
     if (!bucketName) {
       return NextResponse.json(
         { error: 'S3 bucket not configured' },
@@ -139,7 +134,7 @@ export async function POST(request: NextRequest) {
     await unlink(imagePath).catch(() => {});
     await unlink(outputPath).catch(() => {});
 
-    const videoUrl = `https://${bucketName}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${videoKey}`;
+    const videoUrl = await getPresignedUrl(videoKey);
 
     return NextResponse.json({
       success: true,

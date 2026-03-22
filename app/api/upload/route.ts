@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { s3Client, BUCKET_NAME, getPresignedUrl } from '@/lib/s3';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,9 +14,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const bucketName = process.env.AWS_S3_BUCKET_NAME;
-    
-    if (!bucketName) {
+    if (!BUCKET_NAME) {
       return NextResponse.json(
         { error: 'S3 bucket name not configured' },
         { status: 500 }
@@ -34,21 +25,21 @@ export async function POST(request: NextRequest) {
       const buffer = Buffer.from(await file.arrayBuffer());
       const fileName = `${Date.now()}-${file.name}`;
 
-      const command = new PutObjectCommand({
-        Bucket: bucketName,
+      await s3Client.send(new PutObjectCommand({
+        Bucket: BUCKET_NAME,
         Key: fileName,
         Body: buffer,
         ContentType: file.type,
-      });
+      }));
 
-      await s3Client.send(command);
+      const url = await getPresignedUrl(fileName);
 
       return {
         fileName: file.name,
         s3Key: fileName,
         size: file.size,
         type: file.type,
-        url: `https://${bucketName}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${fileName}`,
+        url,
       };
     });
 
