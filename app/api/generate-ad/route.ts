@@ -14,22 +14,22 @@ const bedrockClient = new BedrockRuntimeClient({
 
 const TEMPLATES: Record<string, { bgPrompt: (product: string) => string; layout: 'center' | 'left' | 'right'; accent: string }> = {
   'product-showcase': {
-    bgPrompt: () => `Clean elegant studio background, soft neutral tones, gentle gradient, professional product photography backdrop, minimalist, no text no words no letters`,
+    bgPrompt: (p: string) => `Clean elegant studio background inspired by ${p}, soft neutral tones with subtle thematic elements related to ${p}, gentle gradient, professional product photography backdrop, minimalist, no text no words no letters`,
     layout: 'center',
     accent: '#7c3aed',
   },
   'sale-banner': {
-    bgPrompt: () => `Bold vibrant abstract background, energetic warm colors, dynamic geometric shapes, promotional feel, no text no words no letters`,
+    bgPrompt: (p: string) => `Bold vibrant abstract background themed around ${p}, energetic warm colors, dynamic geometric shapes with visual elements evoking ${p}, promotional feel, no text no words no letters`,
     layout: 'left',
     accent: '#dc2626',
   },
   'lifestyle': {
-    bgPrompt: () => `Beautiful cozy interior scene, warm natural lighting, wooden table surface, soft blurred background, aspirational mood, no text no words no letters`,
+    bgPrompt: (p: string) => `Beautiful cozy lifestyle scene featuring ingredients and elements related to ${p}, warm natural lighting, wooden table surface with scattered items that evoke ${p}, soft blurred background, aspirational mood, no text no words no letters`,
     layout: 'right',
     accent: '#059669',
   },
   'minimal': {
-    bgPrompt: () => `Pure clean white and light gray background, minimalist setting, soft diffused studio light, subtle shadow, no text no words no letters`,
+    bgPrompt: (p: string) => `Pure clean white and light gray background with subtle hints of ${p} theme, minimalist setting, soft diffused studio light, subtle shadow, no text no words no letters`,
     layout: 'center',
     accent: '#111827',
   },
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
     const tmpl = TEMPLATES[template] || TEMPLATES['product-showcase'];
 
     // Generate AI background with surface context for product placement
-    const bgBuffer = await generateBackground(tmpl.bgPrompt());
+    const bgBuffer = await generateBackground(tmpl.bgPrompt(product.title));
 
     // Fetch product image, optionally remove background
     let productImgRaw = await fetchProductImage(product.image);
