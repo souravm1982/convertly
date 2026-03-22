@@ -49,6 +49,9 @@ export default function AdCreator() {
   const [generatingCopy, setGeneratingCopy] = useState(false);
   const [generatedAds, setGeneratedAds] = useState<GeneratedAd[]>([]);
   const [generatingAd, setGeneratingAd] = useState(false);
+  const [removeBg, setRemoveBg] = useState(false);
+  const [removePrice, setRemovePrice] = useState(true);
+  const [productScale, setProductScale] = useState(2.5);
   const [error, setError] = useState<string | null>(null);
 
   const handleScrape = async () => {
@@ -94,7 +97,7 @@ export default function AdCreator() {
     try {
       const res = await fetch("/api/generate-ad", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product: selectedProduct, adCopy, template: selectedTemplate }),
+        body: JSON.stringify({ product: selectedProduct, adCopy, template: selectedTemplate, removeBg, removePrice, productScale }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.details || data.error);
@@ -231,6 +234,27 @@ export default function AdCreator() {
                   <label className="text-xs text-gray-500">Description</label>
                   <input value={adCopy.description} onChange={(e) => setAdCopy({ ...adCopy, description: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
+                </div>
+              </div>
+              <div className="flex gap-4 items-center py-2">
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                  <input type="checkbox" checked={removeBg} onChange={(e) => setRemoveBg(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                  Remove Background
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                  <input type="checkbox" checked={removePrice} onChange={(e) => setRemovePrice(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                  Remove Price
+                </label>
+                <div className="flex items-center gap-1.5 text-sm text-gray-700">
+                  <span>Product Size</span>
+                  <button onClick={() => setProductScale(s => Math.max(1.5, +(s - 0.5).toFixed(1)))}
+                    className="w-6 h-6 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs">▼</button>
+                  <span className="font-semibold w-8 text-center">{productScale}x</span>
+                  <button onClick={() => setProductScale(s => Math.min(3.5, +(s + 0.5).toFixed(1)))}
+                    className="w-6 h-6 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs">▲</button>
+                  <span className="text-xs text-gray-400">(2.5x rec.)</span>
                 </div>
               </div>
               <button onClick={handleGenerateAd} disabled={generatingAd}

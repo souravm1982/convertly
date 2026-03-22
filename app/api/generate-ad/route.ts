@@ -14,22 +14,22 @@ const bedrockClient = new BedrockRuntimeClient({
 
 const TEMPLATES: Record<string, { bgPrompt: (product: string) => string; layout: 'center' | 'left' | 'right'; accent: string }> = {
   'product-showcase': {
-    bgPrompt: (p) => `Clean elegant background setting perfect for displaying ${p}, soft complementary tones, studio lighting, professional product ad backdrop, no text no words no letters`,
+    bgPrompt: () => `Clean elegant studio background, soft neutral tones, gentle gradient, professional product photography backdrop, minimalist, no text no words no letters`,
     layout: 'center',
     accent: '#7c3aed',
   },
   'sale-banner': {
-    bgPrompt: (p) => `Bold vibrant background themed around ${p}, energetic colors related to the product category, dynamic promotional feel, abstract shapes, no text no words no letters`,
+    bgPrompt: () => `Bold vibrant abstract background, energetic warm colors, dynamic geometric shapes, promotional feel, no text no words no letters`,
     layout: 'left',
     accent: '#dc2626',
   },
   'lifestyle': {
-    bgPrompt: (p) => `Beautiful lifestyle scene where someone would use ${p}, realistic setting, warm natural lighting, aspirational mood, slightly blurred background, no text no words no letters`,
+    bgPrompt: () => `Beautiful cozy interior scene, warm natural lighting, wooden table surface, soft blurred background, aspirational mood, no text no words no letters`,
     layout: 'right',
     accent: '#059669',
   },
   'minimal': {
-    bgPrompt: (p) => `Pure clean background with subtle tones that complement ${p}, minimalist setting, soft diffused light, no text no words no letters`,
+    bgPrompt: () => `Pure clean white and light gray background, minimalist setting, soft diffused studio light, subtle shadow, no text no words no letters`,
     layout: 'center',
     accent: '#111827',
   },
@@ -63,6 +63,21 @@ async function fetchProductImage(imageUrl: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
+async function removeBackground(imageBuffer: Buffer): Promise<Buffer> {
+  const command = new InvokeModelCommand({
+    modelId: 'amazon.titan-image-generator-v2:0',
+    contentType: 'application/json',
+    accept: 'application/json',
+    body: JSON.stringify({
+      taskType: 'BACKGROUND_REMOVAL',
+      backgroundRemovalParams: { image: imageBuffer.toString('base64') },
+    }),
+  });
+  const response = await bedrockClient.send(command);
+  const body = JSON.parse(new TextDecoder().decode(response.body));
+  return Buffer.from(body.images[0], 'base64');
+}
+
 function wrapText(text: string, maxWidth: number, fontSize: number): string[] {
   const charsPerLine = Math.floor(maxWidth / (fontSize * 0.55));
   const words = text.split(' ');
@@ -87,7 +102,9 @@ function buildTextSvg(
   price: string,
   compareAtPrice: string | null,
   accent: string,
-  layout: 'center' | 'left' | 'right'
+  layout: 'center' | 'left' | 'right',
+  showPrice: boolean = true,
+  bgRemoved: boolean = false
 ): Buffer {
   const w = 1024;
   const align = layout === 'center' ? 'middle' : layout === 'left' ? 'start' : 'end';
@@ -96,7 +113,13 @@ function buildTextSvg(
   const headlineLines = wrapText(headline, layout === 'center' ? 800 : 500, 52);
   const subLines = wrapText(subheadline, layout === 'center' ? 700 : 450, 28);
 
-  let textY = layout === 'center' ? 680 : 520;
+  // Calculate total text block height to anchor from bottom when bg removed
+  const headlineH = headlineLines.length * 58 + 12;
+  const subH = subLines.length * 34 + 24;
+  const priceH = showPrice ? 48 : 0;
+  const ctaH = 48;
+  const totalH = headlineH + subH + priceH + ctaH + 20;
+  let textY = bgRemoved ? (1024 - totalH) : (layout === 'center' ? 680 : 520);
 
   const headlineSvg = headlineLines.map((line, i) => {
     const esc = line.replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -111,11 +134,14 @@ function buildTextSvg(
   textY += subLines.length * 34 + 24;
 
   // Price
-  const priceText = compareAtPrice
-    ? `<text x="${x}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="22" fill="white" fill-opacity="0.5" text-anchor="${align}" text-decoration="line-through">$${compareAtPrice}</text>
-       <text x="${x + (layout === 'center' ? 60 : layout === 'left' ? 80 : -80)}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="32" font-weight="bold" fill="${accent}" text-anchor="${align}">$${price}</text>`
-    : `<text x="${x}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="32" font-weight="bold" fill="white" text-anchor="${align}">$${price}</text>`;
-  textY += 48;
+  let priceText = '';
+  if (showPrice) {
+    priceText = compareAtPrice
+      ? `<text x="${x}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="22" fill="white" fill-opacity="0.5" text-anchor="${align}" text-decoration="line-through">$${compareAtPrice}</text>
+         <text x="${x + (layout === 'center' ? 60 : layout === 'left' ? 80 : -80)}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="32" font-weight="bold" fill="${accent}" text-anchor="${align}">$${price}</text>`
+      : `<text x="${x}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="32" font-weight="bold" fill="white" text-anchor="${align}">$${price}</text>`;
+    textY += 48;
+  }
 
   // CTA button
   const ctaW = cta.length * 16 + 48;
@@ -127,8 +153,9 @@ function buildTextSvg(
 
   return Buffer.from(`<svg width="${w}" height="1024" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
-        <feDropShadow dx="1" dy="1" stdDeviation="3" flood-color="black" flood-opacity="0.7" />
+      <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+        <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="black" flood-opacity="0.9" />
+        <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="black" flood-opacity="0.6" />
       </filter>
     </defs>
     ${headlineSvg}${subSvg}${priceText}${ctaSvg}
@@ -137,39 +164,60 @@ function buildTextSvg(
 
 export async function POST(request: NextRequest) {
   try {
-    const { product, adCopy, template } = await request.json();
+    const { product, adCopy, template, removeBg = false, removePrice = false, productScale = 2.5 } = await request.json();
     if (!product || !adCopy) return NextResponse.json({ error: 'Product and ad copy required' }, { status: 400 });
 
     const tmpl = TEMPLATES[template] || TEMPLATES['product-showcase'];
 
-    // Generate AI background using product context
-    const productContext = `${product.title}${product.productType ? ' (' + product.productType + ')' : ''}`;
-    const bgBuffer = await generateBackground(tmpl.bgPrompt(productContext));
+    // Generate AI background with surface context for product placement
+    const bgBuffer = await generateBackground(tmpl.bgPrompt());
 
-    // Fetch and resize product image
-    const productImgRaw = await fetchProductImage(product.image);
-    const productSize = tmpl.layout === 'center' ? 420 : 380;
+    // Fetch product image, optionally remove background
+    let productImgRaw = await fetchProductImage(product.image);
+    if (removeBg) {
+      productImgRaw = await removeBackground(productImgRaw);
+    }
+    const baseSize = tmpl.layout === 'center' ? 420 : 380;
+    // Clamp product size to fit within canvas
+    const maxProductSize = 1024 - 40; // leave 20px margin
+    const rawSize = removeBg ? Math.round(baseSize * productScale) : baseSize;
+    const productSize = Math.min(rawSize, maxProductSize);
     const productImg = await sharp(productImgRaw)
       .resize(productSize, productSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
       .toBuffer();
 
-    // Position product image based on layout
-    const productPos = {
-      center: { left: Math.round((1024 - productSize) / 2), top: 120 },
-      left: { left: 520, top: 160 },
-      right: { left: 80, top: 160 },
+    // Position product on the scene — top-left bias when bg removed
+    const productPos = removeBg ? {
+      center: { left: Math.max(0, Math.round((1024 - productSize) / 2 - productSize * 0.2)), top: 20 },
+      left: { left: Math.min(300, 1024 - productSize - 20), top: 20 },
+      right: { left: 10, top: 20 },
+    }[tmpl.layout] : {
+      center: { left: Math.round((1024 - productSize) / 2), top: 180 },
+      left: { left: 520, top: 200 },
+      right: { left: 40, top: 120 },
     }[tmpl.layout];
 
     // Build text overlay SVG
     const textSvg = buildTextSvg(
       adCopy.headline, adCopy.subheadline, adCopy.cta,
-      product.price, product.compareAtPrice, tmpl.accent, tmpl.layout
+      product.price, product.compareAtPrice, tmpl.accent, tmpl.layout, !removePrice, removeBg
     );
+
+    // Create drop shadow: tint product to black, blur it, composite behind
+    const shadowImg = await sharp(productImg)
+      .ensureAlpha()
+      .tint({ r: 0, g: 0, b: 0 })
+      .modulate({ brightness: 0 })
+      .blur(15)
+      .png()
+      .toBuffer();
+    const shadowDx = 6, shadowDy = 8;
 
     // Composite everything
     const finalImage = await sharp(bgBuffer)
       .composite([
+        { input: shadowImg, left: productPos!.left + shadowDx, top: productPos!.top + shadowDy },
         { input: productImg, ...productPos },
         { input: textSvg, top: 0, left: 0 },
       ])

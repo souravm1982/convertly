@@ -25,7 +25,8 @@ export default function ReelCreator() {
   const [selectedForReel, setSelectedForReel] = useState<Set<number>>(new Set());
   const [creatingReel, setCreatingReel] = useState(false);
   const [createdReels, setCreatedReels] = useState<CreatedReel[]>([]);
-  const [transitionDuration, setTransitionDuration] = useState(1.5);
+  const [transitionDuration, setTransitionDuration] = useState(2);
+  const [reelOrder, setReelOrder] = useState<number[]>([]);
   const [imageTexts, setImageTexts] = useState<{[key: number]: string}>({});
   const [textPositions, setTextPositions] = useState<{[key: number]: string}>({});
   const [animationTypes, setAnimationTypes] = useState<{[key: number]: string}>({});
@@ -72,8 +73,22 @@ export default function ReelCreator() {
 
   const toggleImageForReel = (index: number) => {
     const newSelected = new Set(selectedForReel);
-    newSelected.has(index) ? newSelected.delete(index) : newSelected.add(index);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+      setReelOrder(reelOrder.filter(i => i !== index));
+    } else {
+      newSelected.add(index);
+      setReelOrder([...reelOrder, index]);
+    }
     setSelectedForReel(newSelected);
+  };
+
+  const moveInOrder = (from: number, direction: 'up' | 'down') => {
+    const newOrder = [...reelOrder];
+    const to = direction === 'up' ? from - 1 : from + 1;
+    if (to < 0 || to >= newOrder.length) return;
+    [newOrder[from], newOrder[to]] = [newOrder[to], newOrder[from]];
+    setReelOrder(newOrder);
   };
 
   const handleCreateReel = async () => {
@@ -81,14 +96,15 @@ export default function ReelCreator() {
     if (selectedForReel.size > 20) { setError('Maximum 20 images allowed'); setTimeout(() => setError(null), 5000); return; }
     setCreatingReel(true); setError(null); setSuccessMessage(null);
     try {
-      const selectedImages = Array.from(selectedForReel).sort((a, b) => a - b).map(index => uploadedFiles[index]);
+      const orderedIndices = reelOrder.length > 0 ? reelOrder : Array.from(selectedForReel).sort((a, b) => a - b);
+      const selectedImages = orderedIndices.map(index => uploadedFiles[index]);
       const invalidImages = selectedImages.filter(img => !img.s3Key);
       if (invalidImages.length > 0) throw new Error('Some images are missing S3 keys.');
       const response = await fetch('/api/create-reel', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           images: selectedImages.map((img, idx) => {
-            const originalIndex = Array.from(selectedForReel).sort((a, b) => a - b)[idx];
+            const originalIndex = orderedIndices[idx];
             return { ...img, overlayText: imageTexts[originalIndex], textPosition: textPositions[originalIndex], animationType: animationTypes[originalIndex] };
           }),
           transitionDuration,
@@ -205,7 +221,7 @@ export default function ReelCreator() {
                   <img src={file.url} alt={file.fileName} className="w-full h-44 object-cover rounded-lg" />
                   {selectedForReel.has(index) && (
                     <div className="absolute top-2 right-2 bg-violet-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold">
-                      {Array.from(selectedForReel).sort((a, b) => a - b).indexOf(index) + 1}
+                      {reelOrder.indexOf(index) + 1}
                     </div>
                   )}
                 </div>
@@ -247,6 +263,25 @@ export default function ReelCreator() {
             ))}
           </div>
 
+          {/* Reel Order */}
+          {reelOrder.length > 1 && (
+            <div className="border-t border-gray-100 pt-4">
+              <h3 className="text-base font-bold text-gray-900 mb-3">Reel Order</h3>
+              <div className="space-y-2">
+                {reelOrder.map((imgIndex, orderPos) => (
+                  <div key={imgIndex} className="flex items-center gap-3 bg-gray-50 rounded-lg p-2">
+                    <img src={uploadedFiles[imgIndex].url} alt="" className="w-12 h-12 object-cover rounded" />
+                    <span className="text-sm font-medium text-gray-700 flex-1 truncate">{orderPos + 1}. {uploadedFiles[imgIndex].fileName}</span>
+                    <div className="flex gap-1">
+                      <button onClick={() => moveInOrder(orderPos, 'up')} disabled={orderPos === 0} className="text-xs px-2 py-1 bg-white border border-gray-200 rounded disabled:opacity-30">↑</button>
+                      <button onClick={() => moveInOrder(orderPos, 'down')} disabled={orderPos === reelOrder.length - 1} className="text-xs px-2 py-1 bg-white border border-gray-200 rounded disabled:opacity-30">↓</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Reel Controls */}
           <div className="border-t border-gray-100 pt-4">
             <h3 className="text-base font-bold text-gray-900 mb-3">Create Reel</h3>
@@ -259,7 +294,7 @@ export default function ReelCreator() {
                 {creatingReel ? 'Creating...' : `Create Reel (${selectedForReel.size} images)`}
               </button>
             </div>
-            <p className="text-xs text-gray-400 mt-2">Click images to select. Text overlays will be included.</p>
+            <p className="text-xs text-gray-400 mt-2">Click images to select, then reorder above. Text overlays will be included.</p>
           </div>
         </div>
       )}

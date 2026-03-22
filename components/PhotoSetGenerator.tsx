@@ -23,6 +23,8 @@ export default function PhotoSetGenerator() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editFields, setEditFields] = useState({ prompt: "", headline: "", bodyText: "", footer: "" });
   const [error, setError] = useState<string | null>(null);
+  const [creatingReel, setCreatingReel] = useState(false);
+  const [reelUrl, setReelUrl] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -77,6 +79,25 @@ export default function PhotoSetGenerator() {
     setEditFields({ prompt: img.prompt, headline: img.headline, bodyText: img.bodyText, footer: img.footer || "" });
   };
 
+  const handleCreateReel = async () => {
+    if (images.length < 2) return;
+    setCreatingReel(true); setError(null); setReelUrl(null);
+    try {
+      const response = await fetch("/api/create-reel", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images: images.map(img => ({ s3Key: img.s3Key })),
+          transitionDuration: 2,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.details || result.error);
+      setReelUrl(result.videoUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create reel");
+    } finally { setCreatingReel(false); }
+  };
+
   return (
     <div className="space-y-6">
       {/* Hero */}
@@ -127,9 +148,15 @@ export default function PhotoSetGenerator() {
               {generating ? `Generating slide ${images.length + 1} of 7...` : "Your Slides"}
             </h3>
             {!generating && (
-              <button onClick={handleDownloadAll} className="bg-gray-900 text-white text-sm font-semibold py-2 px-5 rounded-full hover:bg-gray-800 transition-all">
-                ⬇ Download All
-              </button>
+              <div className="flex gap-2">
+                <button onClick={handleCreateReel} disabled={creatingReel || images.length < 2}
+                  className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-sm font-semibold py-2 px-5 rounded-full hover:shadow-lg hover:shadow-violet-200 transition-all disabled:opacity-50">
+                  {creatingReel ? "Creating Reel..." : "🎬 Create Reel"}
+                </button>
+                <button onClick={handleDownloadAll} className="bg-gray-900 text-white text-sm font-semibold py-2 px-5 rounded-full hover:bg-gray-800 transition-all">
+                  ⬇ Download All
+                </button>
+              </div>
             )}
           </div>
 
@@ -171,6 +198,14 @@ export default function PhotoSetGenerator() {
               </div>
             ))}
           </div>
+
+          {/* Reel */}
+          {reelUrl && (
+            <div className="border-t border-gray-100 pt-4 mt-4">
+              <h4 className="text-sm font-bold text-gray-900 mb-3">🎬 Your Reel</h4>
+              <video controls className="w-full max-w-md mx-auto rounded-xl" src={reelUrl} />
+            </div>
+          )}
         </div>
       )}
     </div>
