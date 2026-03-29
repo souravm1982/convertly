@@ -1,15 +1,22 @@
 "use client";
 
+import { useSession, signOut } from "next-auth/react";
+import { useState } from "react";
+
 interface NavbarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
 }
 
 export default function Navbar({ activeTab, onTabChange }: NavbarProps) {
+  const { data: session } = useSession();
+  const [showMenu, setShowMenu] = useState(false);
+
   const tabs = [
     { id: "reel-creator", label: "Reel Creator", icon: "🎬" },
     { id: "photo-set", label: "Photo Set Magic", icon: "📸" },
     { id: "ad-creator", label: "Ad Creator", icon: "🎯" },
+    { id: "theme-magic", label: "Theme Magic", icon: "🌍" },
   ];
 
   return (
@@ -43,10 +50,39 @@ export default function Navbar({ activeTab, onTabChange }: NavbarProps) {
           ))}
         </div>
 
-        {/* CTA */}
-        <button className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-sm font-semibold px-5 py-2.5 rounded-full hover:shadow-lg hover:shadow-violet-200 transition-all">
-          Get Started
-        </button>
+        {/* User */}
+        {session?.user ? (
+          <div className="relative">
+            <button onClick={() => setShowMenu(!showMenu)} className="flex items-center gap-2 hover:opacity-80 transition-all">
+              {session.user.image ? (
+                <img src={session.user.image} alt="" className="w-8 h-8 rounded-full" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-sm">
+                  {session.user.name?.[0]}
+                </div>
+              )}
+              <span className="text-sm font-medium text-gray-700 hidden md:block">{session.user.name?.split(" ")[0]}</span>
+            </button>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 top-12 bg-white rounded-xl border border-gray-100 shadow-lg py-2 w-48">
+                  <div className="px-4 py-2 border-b border-gray-50">
+                    <p className="text-sm font-medium text-gray-900">{session.user.name}</p>
+                    <p className="text-xs text-gray-400 truncate">{session.user.email}</p>
+                  </div>
+                  <button onClick={() => signOut()} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-all">
+                    Sign Out
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <a href="/login" className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-sm font-semibold px-5 py-2.5 rounded-full hover:shadow-lg hover:shadow-violet-200 transition-all">
+            Sign In
+          </a>
+        )}
       </div>
     </nav>
   );

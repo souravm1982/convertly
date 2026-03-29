@@ -52,7 +52,15 @@ export default function AdCreator() {
   const [removeBg, setRemoveBg] = useState(false);
   const [removePrice, setRemovePrice] = useState(true);
   const [productScale, setProductScale] = useState(2.5);
+  const [customBgPrompt, setCustomBgPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [sourceMode, setSourceMode] = useState<"shopify" | "manual">("shopify");
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualPrice, setManualPrice] = useState("");
+  const [manualDesc, setManualDesc] = useState("");
+  const [manualImageUrl, setManualImageUrl] = useState("");
+  const [manualImagePreview, setManualImagePreview] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const handleScrape = async () => {
     if (!storeUrl.trim()) return;
@@ -72,6 +80,42 @@ export default function AdCreator() {
   };
 
   const adBuilderRef = useRef<HTMLDivElement>(null);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("files", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const uploadedUrl = data.files[0].url;
+      setManualImageUrl(uploadedUrl);
+      setManualImagePreview(uploadedUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally { setUploadingImage(false); }
+  };
+
+  const handleManualProduct = () => {
+    const product: Product = {
+      id: Date.now(),
+      title: manualTitle || "Product",
+      description: manualDesc,
+      price: manualPrice || "0",
+      compareAtPrice: null,
+      image: manualImagePreview,
+      images: [manualImagePreview],
+      vendor: "",
+      productType: "",
+      tags: [],
+      handle: "",
+      url: "",
+    };
+    handleSelectProduct(product);
+  };
 
   const handleSelectProduct = async (product: Product) => {
     setSelectedProduct(product);
@@ -97,7 +141,7 @@ export default function AdCreator() {
     try {
       const res = await fetch("/api/generate-ad", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product: selectedProduct, adCopy, template: selectedTemplate, removeBg, removePrice, productScale }),
+        body: JSON.stringify({ product: selectedProduct, adCopy, template: selectedTemplate, removeBg, removePrice, productScale, customBgPrompt: customBgPrompt.trim() || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.details || data.error);
@@ -123,24 +167,88 @@ export default function AdCreator() {
     <div className="space-y-6">
       <div className="text-center mb-2">
         <h2 className="text-2xl font-bold text-gray-900">Ad Creator</h2>
-        <p className="text-gray-500 mt-1">Paste a Shopify store URL, pick a product, generate stunning ads.</p>
+        <p className="text-gray-500 mt-1">Scan a Shopify store or add your product manually.</p>
       </div>
 
-      {/* Store URL */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Shopify Store URL</label>
-        <div className="flex gap-3">
-          <input
-            type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)}
-            placeholder="e.g. mystore.myshopify.com or mystore.com"
-            onKeyDown={(e) => e.key === "Enter" && handleScrape()}
-            className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-200 focus:border-violet-300 outline-none"
-          />
-          <button onClick={handleScrape} disabled={scraping || !storeUrl.trim()}
-            className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-3 px-6 rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all whitespace-nowrap">
-            {scraping ? "Scanning..." : "Scan Store"}
+      {/* Source Tabs */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+        <div className="flex gap-2">
+          <button onClick={() => setSourceMode("shopify")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${sourceMode === "shopify" ? "bg-violet-100 text-violet-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
+            🛍️ Shopify Store
+          </button>
+          <button onClick={() => setSourceMode("manual")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${sourceMode === "manual" ? "bg-violet-100 text-violet-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
+            📤 Manual Upload
           </button>
         </div>
+
+        {sourceMode === "shopify" ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Shopify Store URL</label>
+            <div className="flex gap-3">
+              <input
+                type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)}
+                placeholder="e.g. mystore.myshopify.com or mystore.com"
+                onKeyDown={(e) => e.key === "Enter" && handleScrape()}
+                className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-200 focus:border-violet-300 outline-none"
+              />
+              <button onClick={handleScrape} disabled={scraping || !storeUrl.trim()}
+                className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-3 px-6 rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all whitespace-nowrap">
+                {scraping ? "Scanning..." : "Scan Store"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-500">Product Name</label>
+                <input value={manualTitle} onChange={(e) => setManualTitle(e.target.value)}
+                  placeholder="e.g. Handmade Ceramic Mug"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Price</label>
+                <input value={manualPrice} onChange={(e) => setManualPrice(e.target.value)}
+                  placeholder="e.g. 29.99"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Description</label>
+              <input value={manualDesc} onChange={(e) => setManualDesc(e.target.value)}
+                placeholder="Short product description"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Product Image *</label>
+              <div className="flex gap-3 mt-1 items-center">
+                {manualImagePreview ? (
+                  <div className="flex items-center gap-3">
+                    <img src={manualImagePreview} alt="Preview" className="w-16 h-16 object-contain rounded-lg bg-gray-50 border border-gray-100" />
+                    <button onClick={() => { setManualImageUrl(""); setManualImagePreview(""); }}
+                      className="text-xs text-red-500 hover:text-red-600">Remove</button>
+                  </div>
+                ) : (
+                  <>
+                    <input value={manualImageUrl} onChange={(e) => { setManualImageUrl(e.target.value); setManualImagePreview(e.target.value); }}
+                      placeholder="Paste image URL"
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
+                    <label className="bg-gray-50 hover:bg-gray-100 text-gray-600 text-sm font-medium px-4 py-2 rounded-lg border border-gray-200 cursor-pointer transition-all">
+                      Upload
+                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                    </label>
+                  </>
+                )}
+              </div>
+            </div>
+            <button onClick={handleManualProduct} disabled={!manualImagePreview}
+              className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-3 rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all">
+              ✨ Create Ad for This Product
+            </button>
+          </div>
+        )}
       </div>
 
       {error && <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
@@ -257,6 +365,12 @@ export default function AdCreator() {
                   <span className="text-xs text-gray-400">(2.5x rec.)</span>
                 </div>
               </div>
+              <div>
+                <label className="text-xs text-gray-500">Custom Background Prompt <span className="text-gray-400">(optional — describe the background you want)</span></label>
+                <input value={customBgPrompt} onChange={(e) => setCustomBgPrompt(e.target.value)}
+                  placeholder="e.g. tropical beach sunset, rustic wooden table, neon city lights..."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none mt-1" />
+              </div>
               <button onClick={handleGenerateAd} disabled={generatingAd}
                 className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-3 rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all">
                 {generatingAd ? "Generating Ad..." : "🎨 Generate Ad Image"}
@@ -278,10 +392,6 @@ export default function AdCreator() {
                   <button onClick={() => handleDownload(ad)}
                     className="flex-1 bg-gray-900 text-white text-sm font-semibold py-2 rounded-lg hover:bg-gray-800 transition-all">
                     ⬇ Download
-                  </button>
-                  <button onClick={handleGenerateAd} disabled={generatingAd}
-                    className="flex-1 bg-violet-100 text-violet-700 text-sm font-semibold py-2 rounded-lg hover:bg-violet-200 transition-all disabled:opacity-50">
-                    🔄 New Variation
                   </button>
                 </div>
               </div>

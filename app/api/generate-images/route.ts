@@ -3,10 +3,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, BUCKET_NAME, getPresignedUrl } from '@/lib/s3';
 import { PHOTO_SET_CONFIG } from '@/config/photo-set.config';
-import { execSync } from 'child_process';
-import { writeFileSync, readFileSync, mkdirSync, unlinkSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import sharp from 'sharp';
 
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.AWS_REGION || 'us-east-1',
@@ -60,39 +57,39 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
   return lines.slice(0, 3);
 }
 
-function addTextOverlay(imageBuffer: Buffer, headline: string, tempDir: string): Buffer {
-  const inputPath = join(tempDir, `in-${generateId()}.png`);
-  const outputPath = join(tempDir, `out-${generateId()}.png`);
-  writeFileSync(inputPath, imageBuffer);
-
+async function addTextOverlay(imageBuffer: Buffer, headline: string): Promise<Buffer> {
+  const w = 1024;
   const fontSize = 44;
-  const lineHeight = fontSize + 12;
-  const padding = 24;
+  const lineHeight = fontSize + 14;
+  const padding = 28;
   const maxChars = 30;
   const lines = wrapText(headline, maxChars);
   const textBlockH = lines.length * lineHeight;
   const boxH = textBlockH + padding * 2;
   const boxW = 920;
-  const boxY = 1024 - boxH - 50;
+  const boxX = (w - boxW) / 2;
+  const boxY = w - boxH - 50;
 
-  try {
-    const filters: string[] = [
-      `drawbox=x=(iw-${boxW})/2:y=${boxY}:w=${boxW}:h=${boxH}:color=black@0.45:t=fill`,
-    ];
-    lines.forEach((line, i) => {
-      const escaped = line.replace(/'/g, "'\\''").replace(/:/g, '\\:');
-      const y = boxY + padding + i * lineHeight;
-      filters.push(
-        `drawtext=text='${escaped}':fontsize=${fontSize}:fontcolor=white:x=(w-text_w)/2:y=${y}:shadowcolor=black@0.6:shadowx=2:shadowy=2`
-      );
-    });
+  const textLines = lines.map((line, i) => {
+    const esc = line.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const y = boxY + padding + i * lineHeight + fontSize;
+    return `<text x="${w / 2}" y="${y}" font-family="Arial,Helvetica,sans-serif" font-size="${fontSize}" font-weight="bold" fill="white" text-anchor="middle" filter="url(#shadow)">${esc}</text>`;
+  }).join('');
 
-    execSync(`ffmpeg -y -i "${inputPath}" -vf "${filters.join(',')}" "${outputPath}"`, { stdio: 'pipe' });
-    return readFileSync(outputPath);
-  } finally {
-    try { unlinkSync(inputPath); } catch {}
-    try { unlinkSync(outputPath); } catch {}
-  }
+  const svg = Buffer.from(`<svg width="${w}" height="${w}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+        <feDropShadow dx="1" dy="2" stdDeviation="3" flood-color="black" flood-opacity="0.6" />
+      </filter>
+    </defs>
+    <rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" rx="12" fill="black" fill-opacity="0.45" />
+    ${textLines}
+  </svg>`);
+
+  return sharp(imageBuffer)
+    .composite([{ input: svg, top: 0, left: 0 }])
+    .png()
+    .toBuffer();
 }
 
 async function uploadToS3(imageBuffer: Buffer, key: string): Promise<string> {
@@ -109,7 +106,7 @@ export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, regenerateIndex, customPrompt, headline } = await request.json();
+    const { prompt, regenerateIndex, customPrompt, headline, productImageUrl } = await request.json();
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
@@ -119,25 +116,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'S3 bucket not configured' }, { status: 500 });
     }
 
-    const tempDir = join(tmpdir(), 'convertly-gen');
-    mkdirSync(tempDir, { recursive: true });
-
     const index = regenerateIndex ?? 0;
     const theme = PHOTO_SET_CONFIG[index];
     if (!theme) {
       return NextResponse.json({ error: 'Invalid slide index' }, { status: 400 });
     }
 
+    if (productImageUrl && index === 0) {
+      // Hero slide: use product image directly from Shopify
+      const res = await fetch(productImageUrl);
+      if (!res.ok) throw new Error('Failed to fetch product image');
+      const raw = Buffer.from(await res.arrayBuffer());
+      const imageBuffer = await sharp(raw).resize(1024, 1024, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } }).png().toBuffer();
+      const s3Key = `generated/${generateId()}-${theme.id}.png`;
+      const url = await uploadToS3(imageBuffer, s3Key);
+      return NextResponse.json({
+        success: true,
+        image: { url, s3Key, theme: theme.label, prompt: 'Product hero image', headline: theme.headline(prompt), bodyText: theme.bodyText(prompt), footer: theme.footer?.(prompt) },
+      });
+    }
+
     const imagePrompt = customPrompt || theme.visualPrompt(prompt);
     let imageBuffer = await generateImage(imagePrompt);
     const h = headline || theme.headline(prompt);
-    imageBuffer = addTextOverlay(imageBuffer, h, tempDir);
+    imageBuffer = await addTextOverlay(imageBuffer, h);
     const s3Key = `generated/${generateId()}-${theme.id}.png`;
     const url = await uploadToS3(imageBuffer, s3Key);
+    const imagePromptUsed = (productImageUrl && index === 0) ? 'Product hero image' : (customPrompt || theme.visualPrompt(prompt));
 
     return NextResponse.json({
       success: true,
-      image: { url, s3Key, theme: theme.label, prompt: imagePrompt, headline: h },
+      image: { url, s3Key, theme: theme.label, prompt: imagePromptUsed, headline: h, bodyText: theme.bodyText(prompt), footer: theme.footer?.(prompt) },
     });
   } catch (error) {
     console.error('Image generation error:', error);

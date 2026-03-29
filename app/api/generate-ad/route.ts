@@ -64,13 +64,18 @@ async function fetchProductImage(imageUrl: string): Promise<Buffer> {
 }
 
 async function removeBackground(imageBuffer: Buffer): Promise<Buffer> {
+  // Titan v2 BACKGROUND_REMOVAL max dimension is 1408px
+  const resized = await sharp(imageBuffer)
+    .resize(1408, 1408, { fit: 'inside', withoutEnlargement: true })
+    .png()
+    .toBuffer();
   const command = new InvokeModelCommand({
     modelId: 'amazon.titan-image-generator-v2:0',
     contentType: 'application/json',
     accept: 'application/json',
     body: JSON.stringify({
       taskType: 'BACKGROUND_REMOVAL',
-      backgroundRemovalParams: { image: imageBuffer.toString('base64') },
+      backgroundRemovalParams: { image: resized.toString('base64') },
     }),
   });
   const response = await bedrockClient.send(command);
@@ -104,48 +109,50 @@ function buildTextSvg(
   accent: string,
   layout: 'center' | 'left' | 'right',
   showPrice: boolean = true,
-  bgRemoved: boolean = false
+  bgRemoved: boolean = false,
+  useDarkText: boolean = false
 ): Buffer {
   const w = 1024;
-  const align = layout === 'center' ? 'middle' : layout === 'left' ? 'start' : 'end';
-  const x = layout === 'center' ? w / 2 : layout === 'left' ? 80 : w - 80;
+  const textColor = useDarkText ? '#1e1b4b' : '#ffffff';
+  const subOpacity = useDarkText ? '0.65' : '0.9';
+  const shadowColor = useDarkText ? 'white' : 'black';
+  const shadowOpacity = useDarkText ? '0.6' : '0.9';
 
-  const headlineLines = wrapText(headline, layout === 'center' ? 800 : 500, 52);
-  const subLines = wrapText(subheadline, layout === 'center' ? 700 : 450, 28);
+  const headlineLines = wrapText(headline, 600, 52);
+  const subLines = wrapText(subheadline, 500, 28);
 
-  // Calculate total text block height to anchor from bottom when bg removed
-  const headlineH = headlineLines.length * 58 + 12;
-  const subH = subLines.length * 34 + 24;
-  const priceH = showPrice ? 48 : 0;
-  const ctaH = 48;
-  const totalH = headlineH + subH + priceH + ctaH + 20;
-  let textY = bgRemoved ? (1024 - totalH) : (layout === 'center' ? 680 : 520);
+  // Always top-left
+  const x = 60;
+  const align = 'start';
+  let textY = 80;
 
   const headlineSvg = headlineLines.map((line, i) => {
     const esc = line.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    return `<text x="${x}" y="${textY + i * 58}" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="bold" fill="white" text-anchor="${align}" filter="url(#shadow)">${esc}</text>`;
+    return `<text x="${x}" y="${textY + i * 58}" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="bold" fill="${textColor}" text-anchor="${align}" filter="url(#shadow)">${esc}</text>`;
   }).join('');
   textY += headlineLines.length * 58 + 12;
 
   const subSvg = subLines.map((line, i) => {
     const esc = line.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    return `<text x="${x}" y="${textY + i * 34}" font-family="Arial,Helvetica,sans-serif" font-size="26" fill="white" fill-opacity="0.9" text-anchor="${align}" filter="url(#shadow)">${esc}</text>`;
+    return `<text x="${x}" y="${textY + i * 42}" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="bold" fill="${textColor}" fill-opacity="${subOpacity}" text-anchor="${align}" filter="url(#shadow)">${esc}</text>`;
   }).join('');
-  textY += subLines.length * 34 + 24;
+  textY += subLines.length * 42 + 24;
 
   // Price
   let priceText = '';
   if (showPrice) {
     priceText = compareAtPrice
-      ? `<text x="${x}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="22" fill="white" fill-opacity="0.5" text-anchor="${align}" text-decoration="line-through">$${compareAtPrice}</text>
-         <text x="${x + (layout === 'center' ? 60 : layout === 'left' ? 80 : -80)}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="32" font-weight="bold" fill="${accent}" text-anchor="${align}">$${price}</text>`
-      : `<text x="${x}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="32" font-weight="bold" fill="white" text-anchor="${align}">$${price}</text>`;
+      ? `<text x="${x}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="22" fill="${textColor}" fill-opacity="0.5" text-anchor="${align}" text-decoration="line-through">$${compareAtPrice}</text>
+         <text x="${x + 80}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="32" font-weight="bold" fill="${accent}" text-anchor="${align}">$${price}</text>`
+      : `<text x="${x}" y="${textY}" font-family="Arial,Helvetica,sans-serif" font-size="32" font-weight="bold" fill="${textColor}" text-anchor="${align}">$${price}</text>`;
     textY += 48;
   }
 
   // CTA button
+  // CTA button — ensure it stays within canvas
   const ctaW = cta.length * 16 + 48;
-  const ctaX = layout === 'center' ? (w - ctaW) / 2 : layout === 'left' ? 60 : w - ctaW - 60;
+  const ctaX = 60;
+  if (textY + 48 > 1024) textY = 1024 - 60;
   const ctaSvg = `
     <rect x="${ctaX}" y="${textY}" width="${ctaW}" height="48" rx="24" fill="${accent}" />
     <text x="${ctaX + ctaW / 2}" y="${textY + 32}" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="bold" fill="white" text-anchor="middle">${cta.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>
@@ -154,8 +161,8 @@ function buildTextSvg(
   return Buffer.from(`<svg width="${w}" height="1024" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-        <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="black" flood-opacity="0.9" />
-        <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="black" flood-opacity="0.6" />
+        <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="${shadowColor}" flood-opacity="${shadowOpacity}" />
+        <feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="${shadowColor}" flood-opacity="0.5" />
       </filter>
     </defs>
     ${headlineSvg}${subSvg}${priceText}${ctaSvg}
@@ -164,13 +171,21 @@ function buildTextSvg(
 
 export async function POST(request: NextRequest) {
   try {
-    const { product, adCopy, template, removeBg = false, removePrice = false, productScale = 2.5 } = await request.json();
+    const { product, adCopy, template, removeBg = false, removePrice = false, productScale = 2.5, customBgPrompt } = await request.json();
     if (!product || !adCopy) return NextResponse.json({ error: 'Product and ad copy required' }, { status: 400 });
 
     const tmpl = TEMPLATES[template] || TEMPLATES['product-showcase'];
 
-    // Generate AI background with surface context for product placement
-    const bgBuffer = await generateBackground(tmpl.bgPrompt(product.title));
+    // Generate AI background
+    const bgPrompt = customBgPrompt || tmpl.bgPrompt(product.title);
+    const bgBuffer = await generateBackground(bgPrompt);
+
+    // Detect brightness of top-left region (where text will be) to pick text color
+    const stats = await sharp(bgBuffer)
+      .extract({ left: 0, top: 0, width: 600, height: 400 })
+      .stats();
+    const avgBrightness = (stats.channels[0].mean + stats.channels[1].mean + stats.channels[2].mean) / 3;
+    const useDarkText = avgBrightness > 140;
 
     // Fetch product image, optionally remove background
     let productImgRaw = await fetchProductImage(product.image);
@@ -189,9 +204,9 @@ export async function POST(request: NextRequest) {
 
     // Position product on the scene — top-left bias when bg removed
     const productPos = removeBg ? {
-      center: { left: Math.max(0, Math.round((1024 - productSize) / 2 - productSize * 0.2)), top: 20 },
-      left: { left: Math.min(300, 1024 - productSize - 20), top: 20 },
-      right: { left: 10, top: 20 },
+      center: { left: Math.max(0, Math.round((1024 - productSize) / 2 - productSize * 0.2)), top: Math.max(0, Math.round((1024 - productSize) / 2)) },
+      left: { left: Math.min(300, 1024 - productSize - 20), top: Math.max(0, Math.round((1024 - productSize) / 2)) },
+      right: { left: 10, top: Math.max(0, Math.round((1024 - productSize) / 2)) },
     }[tmpl.layout] : {
       center: { left: Math.round((1024 - productSize) / 2), top: 180 },
       left: { left: 520, top: 200 },
@@ -201,7 +216,7 @@ export async function POST(request: NextRequest) {
     // Build text overlay SVG
     const textSvg = buildTextSvg(
       adCopy.headline, adCopy.subheadline, adCopy.cta,
-      product.price, product.compareAtPrice, tmpl.accent, tmpl.layout, !removePrice, removeBg
+      product.price, product.compareAtPrice, tmpl.accent, tmpl.layout, !removePrice, removeBg, useDarkText
     );
 
     // Create drop shadow: tint product to black, blur it, composite behind

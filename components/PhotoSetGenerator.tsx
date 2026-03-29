@@ -12,11 +12,20 @@ interface GeneratedImage {
   footer?: string;
 }
 
+interface ShopifyProduct {
+  title: string;
+  description: string;
+  price: string;
+  image: string;
+}
+
 const THEME_EMOJIS = ["✨", "🔬", "📋", "🐕", "🕯️", "💬", "🛒"];
-const THEME_NAMES = ["The Hook", "Taste Journey", "Blueprint", "Impact", "Vibe", "Social Proof", "CTA"];
+const THEME_NAMES = ["The Hook", "The Story", "Blueprint", "Impact", "Vibe", "Social Proof", "CTA"];
 
 export default function PhotoSetGenerator() {
   const [prompt, setPrompt] = useState("");
+  const [shopifyUrl, setShopifyUrl] = useState("");
+  const [shopifyProduct, setShopifyProduct] = useState<ShopifyProduct | null>(null);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [generating, setGenerating] = useState(false);
   const [generatingIndex, setGeneratingIndex] = useState<number | null>(null);
@@ -25,14 +34,75 @@ export default function PhotoSetGenerator() {
   const [error, setError] = useState<string | null>(null);
   const [creatingReel, setCreatingReel] = useState(false);
   const [reelUrl, setReelUrl] = useState<string | null>(null);
+  const [socialPost, setSocialPost] = useState<string | null>(null);
+  const [generatingPost, setGeneratingPost] = useState(false);
+  const [tagline, setTagline] = useState<string | null>(null);
+
+  const fetchShopifyProduct = async (url: string): Promise<ShopifyProduct | null> => {
+    try {
+      const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
+      const pathParts = parsed.pathname.split("/");
+      const handleIdx = pathParts.indexOf("products");
+      if (handleIdx === -1 || !pathParts[handleIdx + 1]) return null;
+      const handle = pathParts[handleIdx + 1].split("?")[0];
+      const baseUrl = `${parsed.protocol}//${parsed.host}`;
+      const res = await fetch("/api/scrape-store", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: baseUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.products) return null;
+      const product = data.products.find((p: any) => p.handle === handle);
+      if (!product) return null;
+      return { title: product.title, description: product.description, price: product.price, image: product.image };
+    } catch { return null; }
+  };
+
+  const generateSocialPost = async (productName: string, product?: ShopifyProduct | null) => {
+    setGeneratingPost(true);
+    try {
+      const res = await fetch("/api/generate-social-post", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: productName, product }),
+      });
+      const data = await res.json();
+      if (res.ok && data.post) setSocialPost(data.post);
+    } catch {} finally { setGeneratingPost(false); }
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
-    setGenerating(true); setError(null); setImages([]);
+    setGenerating(true); setError(null); setImages([]); setSocialPost(null); setReelUrl(null); setTagline(null);
+
+    let product: ShopifyProduct | null = null;
+    if (shopifyUrl.trim()) {
+      product = await fetchShopifyProduct(shopifyUrl);
+      setShopifyProduct(product);
+    }
+    setTagline(product ? `${product.title} — $${product.price}` : prompt.trim());
+
+    // Generate social post in parallel
+    generateSocialPost(prompt, product);
+
     const results: GeneratedImage[] = [];
+    const totalSlideCount = product?.image ? 8 : 7;
     try {
+      // If we have a product image, add it as slide 0
+      if (product?.image) {
+        setGeneratingIndex(0);
+        const res = await fetch("/api/generate-images", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, regenerateIndex: 0, productImageUrl: product.image }),
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.details || result.error);
+        results.push(result.image);
+        setImages([...results]);
+      }
+
+      // Generate all 7 themed slides
       for (let i = 0; i < 7; i++) {
-        setGeneratingIndex(i);
+        setGeneratingIndex(results.length);
         const response = await fetch("/api/generate-images", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt, regenerateIndex: i }),
@@ -98,6 +168,7 @@ export default function PhotoSetGenerator() {
     } finally { setCreatingReel(false); }
   };
 
+
   return (
     <div className="space-y-6">
       {/* Hero */}
@@ -106,23 +177,33 @@ export default function PhotoSetGenerator() {
         <p className="text-gray-500 mt-1">Catchy photo set ready in minutes — powered by AI.</p>
       </div>
 
-      {/* Prompt */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Product / Theme</label>
-        <div className="flex gap-3">
+      {/* Inputs */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Product / Theme</label>
           <input
             type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)}
             placeholder="e.g. Brazil single blend coffee, Organic matcha tea..."
-            className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-200 focus:border-violet-300 outline-none"
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-200 focus:border-violet-300 outline-none"
           />
-          <button
-            onClick={handleGenerate} disabled={generating || !prompt.trim()}
-            className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-3 px-6 rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all whitespace-nowrap"
-          >
-            {generating ? "Generating..." : "Generate 7 Slides"}
-          </button>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Shopify Product URL <span className="text-gray-400 font-normal">(optional — adds real product photo as hero slide)</span>
+          </label>
+          <input
+            type="text" value={shopifyUrl} onChange={(e) => setShopifyUrl(e.target.value)}
+            placeholder="e.g. https://mystore.com/products/my-product"
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-200 focus:border-violet-300 outline-none text-sm"
+          />
+        </div>
+        <button
+          onClick={handleGenerate} disabled={generating || !prompt.trim()}
+          className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-3 rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all"
+        >
+          {generating ? "Generating..." : "✨ Generate Slides"}
+        </button>
+        <div className="flex flex-wrap gap-2">
           {THEME_NAMES.map((l, i) => (
             <span key={i} className="text-xs bg-gray-50 text-gray-500 px-3 py-1 rounded-full border border-gray-100">{THEME_EMOJIS[i]} {l}</span>
           ))}
@@ -133,19 +214,50 @@ export default function PhotoSetGenerator() {
         <div className="text-center py-12">
           <div className="inline-flex items-center gap-3 bg-violet-50 text-violet-600 px-6 py-3 rounded-full animate-pulse font-medium">
             <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-            Generating slide 1 of 7...
+            {shopifyUrl.trim() ? "Fetching product & generating slide 1..." : "Generating slide 1 of 7..."}
           </div>
         </div>
       )}
 
       {error && <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">{error}</div>}
 
+      {/* Tagline */}
+      {tagline && images.length > 0 && (
+        <div className="bg-gradient-to-r from-violet-50 to-fuchsia-50 rounded-2xl border border-violet-100 p-5 text-center">
+          <p className="text-xs uppercase tracking-wider text-violet-400 font-semibold mb-1">Tagline</p>
+          <p className="text-xl font-bold text-gray-900 break-words">{tagline}</p>
+          {shopifyProduct && shopifyProduct.description && (
+            <p className="text-sm text-gray-500 mt-1 break-words">{shopifyProduct.description}</p>
+          )}
+        </div>
+      )}
+
+      {/* Social Post */}
+      {(socialPost || generatingPost) && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-sm font-bold text-gray-900">📱 Social Media Post</h3>
+            {socialPost && (
+              <button onClick={() => navigator.clipboard.writeText(socialPost)}
+                className="text-xs text-violet-600 hover:text-violet-700 font-medium">
+                📋 Copy
+              </button>
+            )}
+          </div>
+          {generatingPost ? (
+            <p className="text-sm text-violet-500 animate-pulse">Generating post...</p>
+          ) : (
+            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{socialPost}</p>
+          )}
+        </div>
+      )}
+
       {/* Results */}
       {images.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold text-gray-900">
-              {generating ? `Generating slide ${images.length + 1} of 7...` : "Your Slides"}
+              {generating ? `Generating slide ${images.length + 1}...` : "Your Slides"}
             </h3>
             {!generating && (
               <div className="flex gap-2">
@@ -169,7 +281,11 @@ export default function PhotoSetGenerator() {
                   <img src={img.url} alt={img.theme} className="w-full aspect-square object-contain rounded-lg bg-gray-50" />
                 )}
                 <div className="mt-2">
-                  <p className="text-sm font-semibold text-gray-800">{THEME_EMOJIS[index]} Slide {index + 1}: {img.theme}</p>
+                  <p className="text-sm font-semibold text-gray-800">
+                    {img.prompt === 'Product hero image'
+                      ? `📸 Slide 0: Product`
+                      : `${THEME_EMOJIS[shopifyProduct?.image ? index - 1 : index] || "📌"} Slide ${shopifyProduct?.image ? index : index + 1}: ${img.theme}`}
+                  </p>
                   <p className="text-xs text-gray-600 mt-0.5 font-medium">"{img.headline}"</p>
                   <p className="text-xs text-gray-400 mt-0.5">{img.bodyText}</p>
                   {img.footer && <p className="text-xs text-gray-300 mt-0.5 italic">{img.footer}</p>}
