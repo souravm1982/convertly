@@ -3,6 +3,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, BUCKET_NAME, getPresignedUrl } from '@/lib/s3';
 import { PHOTO_SET_CONFIG } from '@/config/photo-set.config';
+import { withMeter } from '@/lib/meter';
 import sharp from 'sharp';
 
 const bedrockClient = new BedrockRuntimeClient({
@@ -105,8 +106,13 @@ async function uploadToS3(imageBuffer: Buffer, key: string): Promise<string> {
 export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
+  const body = await request.json();
+  return withMeter('generate-images', () => handleGenerate(body));
+}
+
+async function handleGenerate(body: any) {
   try {
-    const { prompt, regenerateIndex, customPrompt, headline, productImageUrl } = await request.json();
+    const { prompt, regenerateIndex, customPrompt, headline, productImageUrl } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });

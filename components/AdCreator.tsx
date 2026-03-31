@@ -37,7 +37,7 @@ const TEMPLATES = [
   { id: "minimal", label: "Minimal", emoji: "◻️", desc: "Clean white background" },
 ];
 
-export default function AdCreator() {
+export default function AdCreator({ meteredFetch }: { meteredFetch: typeof fetch }) {
   const [storeUrl, setStoreUrl] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [productCount, setProductCount] = useState(0);
@@ -66,12 +66,12 @@ export default function AdCreator() {
     if (!storeUrl.trim()) return;
     setScraping(true); setError(null); setProducts([]); setSelectedProduct(null); setAdCopy(null); setGeneratedAds([]); setSearchQuery("");
     try {
-      const res = await fetch("/api/scrape-store", {
+      const res = await meteredFetch("/api/scrape-store", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: storeUrl }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.details || data.error);
+      if (!res.ok) throw new Error(data.message || data.details || data.error);
       setProducts(data.products);
       setProductCount(data.productCount);
     } catch (err) {
@@ -88,9 +88,9 @@ export default function AdCreator() {
     try {
       const formData = new FormData();
       formData.append("files", file);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const res = await meteredFetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.message || data.error);
       const uploadedUrl = data.files[0].url;
       setManualImageUrl(uploadedUrl);
       setManualImagePreview(uploadedUrl);
@@ -123,12 +123,12 @@ export default function AdCreator() {
     setGeneratingCopy(true); setError(null);
     setTimeout(() => adBuilderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     try {
-      const res = await fetch("/api/generate-ad-copy", {
+      const res = await meteredFetch("/api/generate-ad-copy", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ product, template: selectedTemplate }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.details || data.error);
+      if (!res.ok) throw new Error(data.message || data.details || data.error);
       setAdCopy(data.adCopy);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate ad copy");
@@ -139,12 +139,12 @@ export default function AdCreator() {
     if (!selectedProduct || !adCopy) return;
     setGeneratingAd(true); setError(null);
     try {
-      const res = await fetch("/api/generate-ad", {
+      const res = await meteredFetch("/api/generate-ad", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ product: selectedProduct, adCopy, template: selectedTemplate, removeBg, removePrice, productScale, customBgPrompt: customBgPrompt.trim() || undefined }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.details || data.error);
+      if (!res.ok) throw new Error(data.message || data.details || data.error);
       setGeneratedAds([data.image, ...generatedAds]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate ad");

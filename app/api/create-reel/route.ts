@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, BUCKET_NAME, getPresignedUrl } from '@/lib/s3';
+import { withMeter } from '@/lib/meter';
 import { Readable } from 'stream';
 import { writeFile, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
@@ -216,22 +217,16 @@ async function createVideoFromImages(
 }
 
 export async function POST(request: NextRequest) {
+  const body = await request.json();
+  return withMeter('create-reel', () => handleCreateReel(body));
+}
+
+async function handleCreateReel(body: any) {
   const tempDir = path.join(tmpdir(), 'reel-generation');
   const imagePaths: string[] = [];
   const outputPath = path.join(tempDir, `reel-${Date.now()}.mp4`);
 
   try {
-    // Parse and validate request body
-    let body;
-    try {
-      body = await request.json();
-    } catch (e) {
-      return NextResponse.json(
-        { error: 'Invalid JSON in request body' },
-        { status: 400 }
-      );
-    }
-
     const { images, transitionDuration = 1.5 } = body;
 
     // Validate images array

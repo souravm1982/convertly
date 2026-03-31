@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, BUCKET_NAME, getPresignedUrl } from '@/lib/s3';
+import { withMeter } from '@/lib/meter';
 import sharp from 'sharp';
 
 const bedrockClient = new BedrockRuntimeClient({
@@ -92,8 +93,17 @@ async function addTextOverlay(imageBuffer: Buffer, caption: string): Promise<Buf
 export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
+  const body = await request.json();
+  // Only meter image generation calls, not the planning step
+  if (body.slides) {
+    return withMeter('generate-theme-slides', () => handleThemeSlide(body));
+  }
+  return handleThemeSlide(body);
+}
+
+async function handleThemeSlide(body: any) {
   try {
-    const { theme, slideIndex, slides } = await request.json();
+    const { theme, slideIndex, slides } = body;
     if (!theme) return NextResponse.json({ error: 'Theme is required' }, { status: 400 });
 
     // If slides not provided, use Claude to plan them

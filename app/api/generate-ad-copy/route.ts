@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
+import { withMeter } from '@/lib/meter';
 
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.AWS_REGION || 'us-east-1',
@@ -10,8 +11,13 @@ const bedrockClient = new BedrockRuntimeClient({
 });
 
 export async function POST(request: NextRequest) {
+  const body = await request.json();
+  return withMeter('generate-ad-copy', () => handleAdCopy(body));
+}
+
+async function handleAdCopy(body: any) {
   try {
-    const { product, template } = await request.json();
+    const { product, template } = body;
     if (!product) return NextResponse.json({ error: 'Product data is required' }, { status: 400 });
 
     const prompt = `You are an expert ad copywriter. Generate ad copy for this product:

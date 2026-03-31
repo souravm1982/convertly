@@ -23,7 +23,7 @@ const SUGGESTIONS = [
   "Top 5 Ancient Civilizations",
 ];
 
-export default function ThemeGenerator() {
+export default function ThemeGenerator({ meteredFetch }: { meteredFetch: typeof fetch }) {
   const [theme, setTheme] = useState("");
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [images, setImages] = useState<GeneratedSlide[]>([]);
@@ -37,7 +37,7 @@ export default function ThemeGenerator() {
   const generateSocialPost = async (t: string) => {
     setGeneratingPost(true);
     try {
-      const res = await fetch("/api/generate-social-post", {
+      const res = await meteredFetch("/api/generate-social-post", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: t }),
       });
@@ -53,12 +53,12 @@ export default function ThemeGenerator() {
 
     try {
       setGeneratingIndex(-1);
-      const planRes = await fetch("/api/generate-theme-slides", {
+      const planRes = await meteredFetch("/api/generate-theme-slides", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ theme }),
       });
       const planData = await planRes.json();
-      if (!planRes.ok) throw new Error(planData.details || planData.error);
+      if (!planRes.ok) throw new Error(planData.message || planData.details || planData.error);
       const planned: SlideData[] = planData.slides;
       setSlides(planned);
 
@@ -67,12 +67,12 @@ export default function ThemeGenerator() {
       const results: GeneratedSlide[] = [];
       for (let i = 0; i < planned.length; i++) {
         setGeneratingIndex(i);
-        const res = await fetch("/api/generate-theme-slides", {
+        const res = await meteredFetch("/api/generate-theme-slides", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ theme, slideIndex: i, slides: planned }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.details || data.error);
+        if (!res.ok) throw new Error(data.message || data.details || data.error);
         results.push(data.image);
         setImages([...results]);
       }

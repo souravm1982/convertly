@@ -12,7 +12,7 @@ export default function LoginPage() {
         <h1 className="text-2xl font-bold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent">
           Convertly
         </h1>
-        <p className="text-gray-500 text-sm mt-2 mb-8">Sign in to create reels, photo sets & ads with AI.</p>
+        <p className="text-gray-500 text-sm mt-2 mb-8">Sign in to create reels, photo slides & ads with Convertly.</p>
         <button
           onClick={() => signIn("google", { callbackUrl: "/" })}
           className="w-full flex items-center justify-center gap-3 bg-white border border-gray-200 rounded-xl py-3 px-4 hover:bg-gray-50 hover:border-gray-300 transition-all font-medium text-gray-700"

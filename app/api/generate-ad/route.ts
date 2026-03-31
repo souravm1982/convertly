@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, BUCKET_NAME, getPresignedUrl } from '@/lib/s3';
+import { withMeter } from '@/lib/meter';
 import sharp from 'sharp';
 
 const bedrockClient = new BedrockRuntimeClient({
@@ -170,8 +171,13 @@ function buildTextSvg(
 }
 
 export async function POST(request: NextRequest) {
+  const body = await request.json();
+  return withMeter('generate-ad', () => handleGenerateAd(body));
+}
+
+async function handleGenerateAd(body: any) {
   try {
-    const { product, adCopy, template, removeBg = false, removePrice = false, productScale = 2.5, customBgPrompt } = await request.json();
+    const { product, adCopy, template, removeBg = false, removePrice = false, productScale = 2.5, customBgPrompt } = body;
     if (!product || !adCopy) return NextResponse.json({ error: 'Product and ad copy required' }, { status: 400 });
 
     const tmpl = TEMPLATES[template] || TEMPLATES['product-showcase'];

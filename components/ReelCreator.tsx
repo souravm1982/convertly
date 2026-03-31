@@ -16,7 +16,7 @@ interface CreatedReel {
   createdAt: number;
 }
 
-export default function ReelCreator() {
+export default function ReelCreator({ meteredFetch }: { meteredFetch: typeof fetch }) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -54,9 +54,9 @@ export default function ReelCreator() {
     try {
       const formData = new FormData();
       selectedFiles.forEach(file => formData.append('files', file));
-      const response = await fetch('/api/upload', { method: 'POST', body: formData });
+      const response = await meteredFetch('/api/upload', { method: 'POST', body: formData });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Upload failed');
+      if (!response.ok) throw new Error(result.message || result.error || 'Upload failed');
       setUploadedFiles([...uploadedFiles, ...result.files]);
       setSuccessMessage(result.message);
       setSelectedFiles([]);
@@ -100,7 +100,7 @@ export default function ReelCreator() {
       const selectedImages = orderedIndices.map(index => uploadedFiles[index]);
       const invalidImages = selectedImages.filter(img => !img.s3Key);
       if (invalidImages.length > 0) throw new Error('Some images are missing S3 keys.');
-      const response = await fetch('/api/create-reel', {
+      const response = await meteredFetch('/api/create-reel', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           images: selectedImages.map((img, idx) => {
@@ -113,7 +113,7 @@ export default function ReelCreator() {
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) throw new Error('Server returned an error page.');
       const result = await response.json();
-      if (!response.ok) throw new Error(result.details ? `${result.error}: ${result.details}` : result.error);
+      if (!response.ok) throw new Error(result.message || result.details || result.error);
       setCreatedReels([{ videoUrl: result.videoUrl, videoKey: result.videoKey, createdAt: Date.now() }, ...createdReels]);
       setSuccessMessage(result.message);
       setSelectedForReel(new Set());
@@ -127,10 +127,10 @@ export default function ReelCreator() {
     setGeneratingForIndex(imageIndex); setGeneratingStatus('Analyzing image...'); setEditingTextIndex(imageIndex); setError(null);
     try {
       setGeneratingStatus('Detecting objects...');
-      const response = await fetch('/api/generate-text', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ s3Key: uploadedFiles[imageIndex].s3Key }) });
+      const response = await meteredFetch('/api/generate-text', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ s3Key: uploadedFiles[imageIndex].s3Key }) });
       setGeneratingStatus('Generating suggestions...');
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
+      if (!response.ok) throw new Error(result.message || result.error);
       const suggestions = result.suggestions.map((s: string) => s.replace(/^\d+\.\s*/, ''));
       setAiSuggestions({ ...aiSuggestions, [imageIndex]: suggestions });
       setTextPositions({ ...textPositions, [imageIndex]: result.textPosition || 'top' });

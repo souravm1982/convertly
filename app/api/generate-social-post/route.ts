@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
+import { withMeter } from '@/lib/meter';
 
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.AWS_REGION || 'us-east-1',
@@ -10,8 +11,13 @@ const bedrockClient = new BedrockRuntimeClient({
 });
 
 export async function POST(request: NextRequest) {
+  const body = await request.json();
+  return withMeter('generate-social-post', () => handleSocialPost(body));
+}
+
+async function handleSocialPost(body: any) {
   try {
-    const { product, prompt } = await request.json();
+    const { product, prompt } = body;
     const productName = product?.title || prompt;
     if (!productName) return NextResponse.json({ error: 'Product or prompt required' }, { status: 400 });
 

@@ -1,16 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Navbar from "@/components/Navbar";
 import ReelCreator from "@/components/ReelCreator";
 import PhotoSetGenerator from "@/components/PhotoSetGenerator";
 import AdCreator from "@/components/AdCreator";
 import ThemeGenerator from "@/components/ThemeGenerator";
+import UpsellModal from "@/components/UpsellModal";
+import { useMeteredFetch } from "@/hooks/useMeteredFetch";
+import { TierName } from "@/config/billing.config";
 
 export default function Home() {
   const { data: session, status } = useSession();
-  const [activeTab, setActiveTab] = useState("reel-creator");
+  const [activeTab, setActiveTab] = useState("photo-set");
+  const [userTier, setUserTier] = useState<TierName>("free");
+  const { meteredFetch, upsell, closeUpsell, handleUpgrade: baseUpgrade } = useMeteredFetch();
+
+  const fetchTier = async () => {
+    try {
+      const res = await fetch("/api/usage");
+      if (res.ok) {
+        const data = await res.json();
+        setUserTier(data.tier);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (session?.user) fetchTier();
+  }, [session]);
+
+  const handleTabChange = (tab: string) => {
+    if (tab.startsWith('upgrade:')) {
+      const tier = tab.split(':')[1] as TierName;
+      handleUpgrade(tier);
+      return;
+    }
+    setActiveTab(tab);
+  };
+
+  const handleUpgrade = async (tier: TierName) => {
+    await baseUpgrade(tier);
+    setUserTier(tier);
+  };
 
   if (status === "loading") {
     return (
@@ -38,7 +71,7 @@ export default function Home() {
         </nav>
         <main className="max-w-3xl mx-auto px-6 pt-32 pb-16 text-center">
           <h1 className="text-5xl font-bold text-gray-900 leading-tight">
-            Create stunning <span className="bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent">Reels, Photo Sets & Ads</span> with AI
+            Create stunning <span className="bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent">Reels, Photo Slides & Ads</span>
           </h1>
           <p className="text-lg text-gray-500 mt-4 max-w-xl mx-auto">
             Turn your product into scroll-stopping content. Generate photo carousels, video reels, and ad creatives in minutes.
@@ -50,7 +83,7 @@ export default function Home() {
           </div>
           <div className="flex justify-center gap-8 mt-12 text-sm text-gray-400">
             <span>🎬 Reel Creator</span>
-            <span>📸 Photo Set Magic</span>
+            <span>📸 Photo Slides</span>
             <span>🎯 Ad Creator</span>
             <span>🌍 Theme Magic</span>
           </div>
@@ -61,13 +94,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50/50">
-      <Navbar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Navbar activeTab={activeTab} onTabChange={handleTabChange} userTier={userTier} />
       <main className="max-w-5xl mx-auto px-6 pt-24 pb-16">
-        <div className={activeTab === "reel-creator" ? "" : "hidden"}><ReelCreator /></div>
-        <div className={activeTab === "photo-set" ? "" : "hidden"}><PhotoSetGenerator /></div>
-        <div className={activeTab === "ad-creator" ? "" : "hidden"}><AdCreator /></div>
-        <div className={activeTab === "theme-magic" ? "" : "hidden"}><ThemeGenerator /></div>
+        <div className={activeTab === "reel-creator" ? "" : "hidden"}><ReelCreator meteredFetch={meteredFetch} /></div>
+        <div className={activeTab === "photo-set" ? "" : "hidden"}><PhotoSetGenerator meteredFetch={meteredFetch} /></div>
+        <div className={activeTab === "ad-creator" ? "" : "hidden"}><AdCreator meteredFetch={meteredFetch} /></div>
+        <div className={activeTab === "theme-magic" ? "" : "hidden"}><ThemeGenerator meteredFetch={meteredFetch} /></div>
       </main>
+      <UpsellModal show={upsell.show} message={upsell.message} tierRequired={upsell.tierRequired} onClose={closeUpsell} onUpgrade={handleUpgrade} />
     </div>
   );
 }

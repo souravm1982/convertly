@@ -21,11 +21,13 @@ interface ShopifyProduct {
 
 const THEME_EMOJIS = ["✨", "🔬", "📋", "🐕", "🕯️", "💬", "🛒"];
 const THEME_NAMES = ["The Hook", "The Story", "Blueprint", "Impact", "Vibe", "Social Proof", "CTA"];
+const DEFAULT_ENABLED = [true, true, true, true, true, true, true];
 
-export default function PhotoSetGenerator() {
+export default function PhotoSetGenerator({ meteredFetch }: { meteredFetch: typeof fetch }) {
   const [prompt, setPrompt] = useState("");
   const [shopifyUrl, setShopifyUrl] = useState("");
   const [shopifyProduct, setShopifyProduct] = useState<ShopifyProduct | null>(null);
+  const [enabledSlides, setEnabledSlides] = useState<boolean[]>(DEFAULT_ENABLED);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [generating, setGenerating] = useState(false);
   const [generatingIndex, setGeneratingIndex] = useState<number | null>(null);
@@ -46,7 +48,7 @@ export default function PhotoSetGenerator() {
       if (handleIdx === -1 || !pathParts[handleIdx + 1]) return null;
       const handle = pathParts[handleIdx + 1].split("?")[0];
       const baseUrl = `${parsed.protocol}//${parsed.host}`;
-      const res = await fetch("/api/scrape-store", {
+      const res = await meteredFetch("/api/scrape-store", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: baseUrl }),
       });
@@ -61,7 +63,7 @@ export default function PhotoSetGenerator() {
   const generateSocialPost = async (productName: string, product?: ShopifyProduct | null) => {
     setGeneratingPost(true);
     try {
-      const res = await fetch("/api/generate-social-post", {
+      const res = await meteredFetch("/api/generate-social-post", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: productName, product }),
       });
@@ -90,25 +92,26 @@ export default function PhotoSetGenerator() {
       // If we have a product image, add it as slide 0
       if (product?.image) {
         setGeneratingIndex(0);
-        const res = await fetch("/api/generate-images", {
+        const res = await meteredFetch("/api/generate-images", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt, regenerateIndex: 0, productImageUrl: product.image }),
         });
         const result = await res.json();
-        if (!res.ok) throw new Error(result.details || result.error);
+        if (!res.ok) throw new Error(result.message || result.details || result.error);
         results.push(result.image);
         setImages([...results]);
       }
 
-      // Generate all 7 themed slides
-      for (let i = 0; i < 7; i++) {
+      // Generate enabled themed slides only
+      const activeIndices = enabledSlides.map((on, i) => on ? i : -1).filter(i => i >= 0);
+      for (const i of activeIndices) {
         setGeneratingIndex(results.length);
-        const response = await fetch("/api/generate-images", {
+        const response = await meteredFetch("/api/generate-images", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt, regenerateIndex: i }),
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.details || result.error);
+        if (!response.ok) throw new Error(result.message || result.details || result.error);
         results.push(result.image);
         setImages([...results]);
       }
@@ -120,12 +123,12 @@ export default function PhotoSetGenerator() {
   const handleRegenerate = async (index: number) => {
     setGeneratingIndex(index); setError(null);
     try {
-      const response = await fetch("/api/generate-images", {
+      const response = await meteredFetch("/api/generate-images", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, regenerateIndex: index, customPrompt: editFields.prompt, headline: editFields.headline }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.details || result.error);
+      if (!response.ok) throw new Error(result.message || result.details || result.error);
       const updated = [...images]; updated[index] = result.image; setImages(updated);
       setEditingIndex(null);
     } catch (err) {
@@ -153,7 +156,7 @@ export default function PhotoSetGenerator() {
     if (images.length < 2) return;
     setCreatingReel(true); setError(null); setReelUrl(null);
     try {
-      const response = await fetch("/api/create-reel", {
+      const response = await meteredFetch("/api/create-reel", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           images: images.map(img => ({ s3Key: img.s3Key })),
@@ -161,7 +164,7 @@ export default function PhotoSetGenerator() {
         }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.details || result.error);
+      if (!response.ok) throw new Error(result.message || result.details || result.error);
       setReelUrl(result.videoUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create reel");
@@ -173,8 +176,8 @@ export default function PhotoSetGenerator() {
     <div className="space-y-6">
       {/* Hero */}
       <div className="text-center mb-2">
-        <h2 className="text-2xl font-bold text-gray-900">Photo Set Magic</h2>
-        <p className="text-gray-500 mt-1">Catchy photo set ready in minutes — powered by AI.</p>
+        <h2 className="text-2xl font-bold text-gray-900">Photo Slides</h2>
+        <p className="text-gray-500 mt-1">Catchy photo slides ready in minutes — powered by AI.</p>
       </div>
 
       {/* Inputs */}
@@ -201,11 +204,18 @@ export default function PhotoSetGenerator() {
           onClick={handleGenerate} disabled={generating || !prompt.trim()}
           className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-3 rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all"
         >
-          {generating ? "Generating..." : "✨ Generate Slides"}
+          {generating ? "Generating..." : `✨ Generate ${enabledSlides.filter(Boolean).length} Slides`}
         </button>
         <div className="flex flex-wrap gap-2">
           {THEME_NAMES.map((l, i) => (
-            <span key={i} className="text-xs bg-gray-50 text-gray-500 px-3 py-1 rounded-full border border-gray-100">{THEME_EMOJIS[i]} {l}</span>
+            <button key={i} onClick={() => { const next = [...enabledSlides]; next[i] = !next[i]; setEnabledSlides(next); }}
+              className={`text-xs px-3 py-1 rounded-full border transition-all ${
+                enabledSlides[i]
+                  ? "bg-violet-50 text-violet-600 border-violet-200"
+                  : "bg-gray-50 text-gray-400 border-gray-100 line-through"
+              }`}>
+              {THEME_EMOJIS[i]} {l}
+            </button>
           ))}
         </div>
       </div>
@@ -261,10 +271,6 @@ export default function PhotoSetGenerator() {
             </h3>
             {!generating && (
               <div className="flex gap-2">
-                <button onClick={handleCreateReel} disabled={creatingReel || images.length < 2}
-                  className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-sm font-semibold py-2 px-5 rounded-full hover:shadow-lg hover:shadow-violet-200 transition-all disabled:opacity-50">
-                  {creatingReel ? "Creating Reel..." : "🎬 Create Reel"}
-                </button>
                 <button onClick={handleDownloadAll} className="bg-gray-900 text-white text-sm font-semibold py-2 px-5 rounded-full hover:bg-gray-800 transition-all">
                   ⬇ Download All
                 </button>
@@ -315,13 +321,7 @@ export default function PhotoSetGenerator() {
             ))}
           </div>
 
-          {/* Reel */}
-          {reelUrl && (
-            <div className="border-t border-gray-100 pt-4 mt-4">
-              <h4 className="text-sm font-bold text-gray-900 mb-3">🎬 Your Reel</h4>
-              <video controls className="w-full max-w-md mx-auto rounded-xl" src={reelUrl} />
-            </div>
-          )}
+
         </div>
       )}
     </div>
