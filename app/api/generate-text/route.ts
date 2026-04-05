@@ -1,22 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { RekognitionClient, DetectLabelsCommand } from '@aws-sdk/client-rekognition';
+import { getAWSConfig, getS3BucketName } from '@/lib/aws-config';
 
-const bedrockClient = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
-
-const rekognitionClient = new RekognitionClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+const bedrockClient = new BedrockRuntimeClient(getAWSConfig());
+const rekognitionClient = new RekognitionClient(getAWSConfig());
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+    const bucketName = getS3BucketName();
     if (!bucketName) {
       return NextResponse.json(
         { error: 'S3 bucket not configured' },
@@ -68,18 +56,18 @@ export async function POST(request: NextRequest) {
     }
     
     // Determine animation type based on detected objects
-    const labelNames = rekognitionResponse.Labels?.map(l => l.Name?.toLowerCase()) || [];
+    const labelNames = rekognitionResponse.Labels?.map(l => l.Name?.toLowerCase()).filter(Boolean) || [];
     let animationType = 'zoom_in'; // default
     
-    if (labelNames.some(l => ['car', 'vehicle', 'automobile', 'truck', 'bus'].includes(l))) {
+    if (labelNames.some(l => l && ['car', 'vehicle', 'automobile', 'truck', 'bus'].includes(l))) {
       animationType = 'pan_right';
-    } else if (labelNames.some(l => ['landscape', 'mountain', 'sky', 'scenery', 'nature'].includes(l))) {
+    } else if (labelNames.some(l => l && ['landscape', 'mountain', 'sky', 'scenery', 'nature'].includes(l))) {
       animationType = 'ken_burns';
-    } else if (labelNames.some(l => ['coffee', 'cup', 'beverage', 'drink', 'food', 'plate'].includes(l))) {
+    } else if (labelNames.some(l => l && ['coffee', 'cup', 'beverage', 'drink', 'food', 'plate'].includes(l))) {
       animationType = 'zoom_in_slow';
-    } else if (labelNames.some(l => ['person', 'human', 'face', 'portrait'].includes(l))) {
+    } else if (labelNames.some(l => l && ['person', 'human', 'face', 'portrait'].includes(l))) {
       animationType = 'zoom_in_center';
-    } else if (labelNames.some(l => ['animal', 'dog', 'cat', 'bird', 'pet'].includes(l))) {
+    } else if (labelNames.some(l => l && ['animal', 'dog', 'cat', 'bird', 'pet'].includes(l))) {
       animationType = 'zoom_in_center';
     }
 

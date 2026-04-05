@@ -14,8 +14,8 @@ export function useMeteredFetch() {
   const { data: session } = useSession();
   const [upsell, setUpsell] = useState<UpsellState>({ show: false, message: "" });
 
-  const meteredFetch = useCallback(async (url: string, options?: RequestInit): Promise<Response> => {
-    const res = await fetch(url, options);
+  const meteredFetch = useCallback(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const res = await fetch(input, init);
 
     if (res.status === 403) {
       const data = await res.clone().json();
