@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { withMeter } from '@/lib/meter';
+import { getAWSConfig } from '@/lib/aws-config';
 
-const bedrockClient = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+const bedrockClient = new BedrockRuntimeClient(getAWSConfig());
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  return withMeter(request, 'generate-ad-copy', () => handleAdCopy(body));
+  const requestBody = await request.json();
+  return withMeter(request, 'generate-ad-copy', () => handleAdCopy(requestBody));
 }
 
-async function handleAdCopy(body: any) {
+async function handleAdCopy(requestBody: any) {
   try {
-    const { product, template } = body;
+    const { product, template } = requestBody;
     if (!product) return NextResponse.json({ error: 'Product data is required' }, { status: 400 });
 
     const prompt = `You are an expert ad copywriter. Generate ad copy for this product:
@@ -48,8 +43,8 @@ Return ONLY valid JSON with this exact structure, no markdown:
     });
 
     const response = await bedrockClient.send(command);
-    const body = JSON.parse(new TextDecoder().decode(response.body));
-    const text = body.content[0].text;
+    const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+    const text = responseBody.content[0].text;
 
     // Extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
