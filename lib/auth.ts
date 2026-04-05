@@ -2,33 +2,46 @@ import GoogleProvider from 'next-auth/providers/google';
 import type { NextAuthOptions } from 'next-auth';
 import { getSecret } from './secrets';
 
-let cachedSecrets: any = null;
+// Cache for secrets
+let secretsCache: any = null;
+let secretsPromise: Promise<any> | null = null;
 
-async function getAuthSecrets() {
-  if (cachedSecrets) return cachedSecrets;
+// Initialize secrets on module load
+const initializeSecrets = async () => {
+  if (secretsCache) return secretsCache;
+  if (secretsPromise) return secretsPromise;
   
-  try {
-    cachedSecrets = await getSecret('nextauth-secrets');
-    return cachedSecrets;
-  } catch (error) {
-    console.error('Failed to load secrets from AWS Secrets Manager:', error);
-    throw error;
-  }
-}
+  secretsPromise = getSecret('nextauth-secrets')
+    .then(secrets => {
+      secretsCache = secrets;
+      return secrets;
+    })
+    .catch(error => {
+      console.error('Failed to load secrets, using environment variables:', error);
+      // Fallback to environment variables
+      return {
+        NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+        GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+        GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+        NEXTAUTH_URL: process.env.NEXTAUTH_URL
+      };
+    });
+    
+  return secretsPromise;
+};
 
-export async function getAuthOptions(): Promise<NextAuthOptions> {
-  const secrets = await getAuthSecrets();
-  
-  return {
-    providers: [
-      GoogleProvider({
-        clientId: secrets.GOOGLE_CLIENT_ID,
-        clientSecret: secrets.GOOGLE_CLIENT_SECRET,
-      }),
-    ],
-    secret: secrets.NEXTAUTH_SECRET,
-    pages: {
-      signIn: '/login',
-    },
-  };
-}
+// Initialize secrets immediately
+initializeSecrets();
+
+export const authOptions: NextAuthOptions = {
+  providers: [
+    GoogleProvider({
+      clientId: secretsCache?.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '',
+      clientSecret: secretsCache?.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '',
+    }),
+  ],
+  secret: secretsCache?.NEXTAUTH_SECRET || process.env.NEXTAUTH_SECRET,
+  pages: {
+    signIn: '/login',
+  },
+};
