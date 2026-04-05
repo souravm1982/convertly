@@ -6,30 +6,48 @@ import { getSecret } from '@/lib/secrets';
 let secretsCache: any = null;
 
 const handler = async (req: any, res: any) => {
-  // Load secrets if not cached
-  if (!secretsCache) {
-    try {
-      secretsCache = await getSecret('nextauth-secrets');
-      console.log('Secrets loaded from AWS Secrets Manager');
-    } catch (error) {
-      console.error('Failed to load secrets:', error);
-      throw error;
-    }
-  }
+  let authOptions;
 
-  // Create NextAuth options with loaded secrets
-  const authOptions = {
-    providers: [
-      GoogleProvider({
-        clientId: secretsCache.GOOGLE_CLIENT_ID,
-        clientSecret: secretsCache.GOOGLE_CLIENT_SECRET,
-      }),
-    ],
-    secret: secretsCache.NEXTAUTH_SECRET,
-    pages: {
-      signIn: '/login',
-    },
-  };
+  if (process.env.NODE_ENV === 'development') {
+    // Local development - use environment variables
+    console.log('Using local environment variables for NextAuth');
+    authOptions = {
+      providers: [
+        GoogleProvider({
+          clientId: process.env.GOOGLE_CLIENT_ID!,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        }),
+      ],
+      secret: process.env.NEXTAUTH_SECRET,
+      pages: {
+        signIn: '/login',
+      },
+    };
+  } else {
+    // Production - use AWS Secrets Manager
+    if (!secretsCache) {
+      try {
+        secretsCache = await getSecret('nextauth-secrets');
+        console.log('Secrets loaded from AWS Secrets Manager');
+      } catch (error) {
+        console.error('Failed to load secrets:', error);
+        throw error;
+      }
+    }
+
+    authOptions = {
+      providers: [
+        GoogleProvider({
+          clientId: secretsCache.GOOGLE_CLIENT_ID,
+          clientSecret: secretsCache.GOOGLE_CLIENT_SECRET,
+        }),
+      ],
+      secret: secretsCache.NEXTAUTH_SECRET,
+      pages: {
+        signIn: '/login',
+      },
+    };
+  }
 
   return NextAuth(authOptions)(req, res);
 };
