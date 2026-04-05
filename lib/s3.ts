@@ -1,15 +1,10 @@
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { getAWSConfig, getS3BucketName } from './aws-config';
 
-export const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+export const s3Client = new S3Client(getAWSConfig());
 
-export const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || '';
+export const BUCKET_NAME = getS3BucketName();
 
 export async function getPresignedUrl(key: string, expiresIn = 3600): Promise<string> {
   const command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: key });

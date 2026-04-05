@@ -4,15 +4,10 @@ import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, BUCKET_NAME, getPresignedUrl } from '@/lib/s3';
 import { PHOTO_SET_CONFIG } from '@/config/photo-set.config';
 import { withMeter } from '@/lib/meter';
+import { getAWSConfig } from '@/lib/aws-config';
 import sharp from 'sharp';
 
-const bedrockClient = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+const bedrockClient = new BedrockRuntimeClient(getAWSConfig());
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
