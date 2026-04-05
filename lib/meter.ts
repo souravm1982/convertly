@@ -1,16 +1,16 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 import { checkLimit, incrementUsage, getOrCreateUser } from '@/lib/user';
 
-export async function withMeter(action: string, handler: () => Promise<NextResponse>): Promise<NextResponse> {
-  const session = await getServerSession();
-  if (!session?.user?.email) {
+export async function withMeter(request: NextRequest, action: string, handler: () => Promise<NextResponse>): Promise<NextResponse> {
+  const token = await getToken({ req: request });
+  if (!token?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  await getOrCreateUser(session.user.email, session.user.name || '', session.user.image || '');
+  await getOrCreateUser(token.email, token.name || '', token.picture || '');
 
-  const check = await checkLimit(session.user.email, action);
+  const check = await checkLimit(token.email, action);
   if (!check.allowed) {
     return NextResponse.json({
       error: 'limit_reached',
@@ -24,9 +24,8 @@ export async function withMeter(action: string, handler: () => Promise<NextRespo
   const result = await handler();
 
   if (result.status === 200) {
-    await incrementUsage(session.user.email, action);
-    // Check if they just hit the limit — attach warning to response
-    const after = await checkLimit(session.user.email, action);
+    await incrementUsage(token.email, action);
+    const after = await checkLimit(token.email, action);
     if (!after.allowed) {
       const body = await result.json();
       return NextResponse.json({

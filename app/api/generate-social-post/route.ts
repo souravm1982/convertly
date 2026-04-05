@@ -12,7 +12,7 @@ const bedrockClient = new BedrockRuntimeClient({
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  return withMeter('generate-social-post', () => handleSocialPost(body));
+  return withMeter(request, 'generate-social-post', () => handleSocialPost(body));
 }
 
 async function handleSocialPost(body: any) {

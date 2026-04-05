@@ -107,7 +107,7 @@ export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  return withMeter('generate-images', () => handleGenerate(body));
+  return withMeter(request, 'generate-images', () => handleGenerate(body));
 }
 
 async function handleGenerate(body: any) {

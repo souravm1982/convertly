@@ -218,7 +218,7 @@ async function createVideoFromImages(
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  return withMeter('create-reel', () => handleCreateReel(body));
+  return withMeter(request, 'create-reel', () => handleCreateReel(body));
 }
 
 async function handleCreateReel(body: any) {

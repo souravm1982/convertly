@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { TierName } from "@/config/billing.config";
 
 interface UpsellState {
@@ -10,6 +11,7 @@ interface UpsellState {
 }
 
 export function useMeteredFetch() {
+  const { data: session } = useSession();
   const [upsell, setUpsell] = useState<UpsellState>({ show: false, message: "" });
 
   const meteredFetch = useCallback(async (url: string, options?: RequestInit): Promise<Response> => {
@@ -45,12 +47,12 @@ export function useMeteredFetch() {
     const res = await fetch("/api/upgrade", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tier }),
+      body: JSON.stringify({ tier, email: session?.user?.email }),
     });
     if (res.ok) {
       setUpsell({ show: false, message: "" });
     }
-  }, []);
+  }, [session]);
 
   return { meteredFetch, upsell, closeUpsell, handleUpgrade };
 }

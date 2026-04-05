@@ -1,6 +1,8 @@
 "use client";
 
-import { TIERS } from "@/config/billing.config";
+import { useSession } from "next-auth/react";
+import { useState } from "react";
+import { TIERS, TierName } from "@/config/billing.config";
 
 const FEATURE_LABELS: Record<string, string> = {
   photoSlides: "📸 Photo Slides",
@@ -10,13 +12,36 @@ const FEATURE_LABELS: Record<string, string> = {
   socialPosts: "📱 Social Posts",
 };
 
-const tiers = [
+const tierStyles = [
   { key: "free", border: "border-gray-200", bg: "bg-gray-50", btn: "bg-gray-900 text-white hover:bg-gray-800", badge: null },
   { key: "base", border: "border-blue-200", bg: "bg-blue-50/40", btn: "bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:shadow-lg hover:shadow-blue-200", badge: "POPULAR" },
   { key: "premium", border: "border-fuchsia-200", bg: "bg-fuchsia-50/30", btn: "bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:shadow-lg hover:shadow-fuchsia-200", badge: "BEST VALUE" },
 ];
 
 export default function PricingPage() {
+  const { data: session } = useSession();
+  const [upgrading, setUpgrading] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const handleUpgrade = async (tier: TierName) => {
+    if (!session?.user?.email) {
+      window.location.href = "/login";
+      return;
+    }
+    setUpgrading(tier);
+    try {
+      const res = await fetch("/api/upgrade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier, email: session.user.email }),
+      });
+      if (res.ok) {
+        setSuccess(tier);
+        setTimeout(() => { window.location.href = "/"; }, 1500);
+      }
+    } catch {} finally { setUpgrading(null); }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50/50">
       <nav className="bg-white border-b border-gray-100 shadow-sm">
@@ -37,8 +62,14 @@ export default function PricingPage() {
           <p className="text-gray-500 mt-3 text-lg">Start free. Upgrade when you need more.</p>
         </div>
 
+        {success && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-center text-green-700 font-medium">
+            ✅ Upgraded to {TIERS[success as TierName].name}! Redirecting...
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {tiers.map(({ key, border, bg, btn, badge }) => {
+          {tierStyles.map(({ key, border, bg, btn, badge }) => {
             const tier = TIERS[key as keyof typeof TIERS];
             return (
               <div key={key} className={`rounded-2xl border-2 ${border} ${bg} p-6 relative`}>
@@ -72,10 +103,17 @@ export default function PricingPage() {
                   ))}
                 </div>
 
-                <a href={key === "free" ? "/login" : "/login"}
-                  className={`block w-full mt-6 py-3 rounded-xl text-sm font-semibold text-center transition-all ${btn}`}>
-                  {key === "free" ? "Get Started" : `Upgrade to ${tier.name}`}
-                </a>
+                {key === "free" ? (
+                  <a href="/"
+                    className={`block w-full mt-6 py-3 rounded-xl text-sm font-semibold text-center transition-all ${btn}`}>
+                    Current Plan
+                  </a>
+                ) : (
+                  <button onClick={() => handleUpgrade(key as TierName)} disabled={upgrading === key}
+                    className={`w-full mt-6 py-3 rounded-xl text-sm font-semibold text-center transition-all disabled:opacity-50 ${btn}`}>
+                    {upgrading === key ? "Upgrading..." : `Upgrade to ${tier.name}`}
+                  </button>
+                )}
               </div>
             );
           })}

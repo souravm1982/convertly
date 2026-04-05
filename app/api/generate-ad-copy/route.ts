@@ -12,7 +12,7 @@ const bedrockClient = new BedrockRuntimeClient({
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  return withMeter('generate-ad-copy', () => handleAdCopy(body));
+  return withMeter(request, 'generate-ad-copy', () => handleAdCopy(body));
 }
 
 async function handleAdCopy(body: any) {

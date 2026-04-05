@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   // Only meter image generation calls, not the planning step
   if (body.slides) {
-    return withMeter('generate-theme-slides', () => handleThemeSlide(body));
+    return withMeter(request, 'generate-theme-slides', () => handleThemeSlide(body));
   }
   return handleThemeSlide(body);
 }

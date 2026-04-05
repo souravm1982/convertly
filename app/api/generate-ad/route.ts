@@ -172,7 +172,7 @@ function buildTextSvg(
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  return withMeter('generate-ad', () => handleGenerateAd(body));
+  return withMeter(request, 'generate-ad', () => handleGenerateAd(body));
 }
 
 async function handleGenerateAd(body: any) {
