@@ -3,15 +3,10 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, BUCKET_NAME, getPresignedUrl } from '@/lib/s3';
 import { withMeter } from '@/lib/meter';
+import { getAWSConfig } from '@/lib/aws-config';
 import sharp from 'sharp';
 
-const bedrockClient = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+const bedrockClient = new BedrockRuntimeClient(getAWSConfig());
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -29,8 +24,8 @@ async function generateImage(prompt: string): Promise<Buffer> {
     }),
   });
   const response = await bedrockClient.send(command);
-  const body = JSON.parse(new TextDecoder().decode(response.body));
-  return Buffer.from(body.images[0], 'base64');
+  const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+  return Buffer.from(responseBody.images[0], 'base64');
 }
 
 function wrapText(text: string, maxChars: number): string[] {
@@ -93,17 +88,17 @@ async function addTextOverlay(imageBuffer: Buffer, caption: string): Promise<Buf
 export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  const requestBody = await request.json();
   // Only meter image generation calls, not the planning step
-  if (body.slides) {
-    return withMeter(request, 'generate-theme-slides', () => handleThemeSlide(body));
+  if (requestBody.slides) {
+    return withMeter(request, 'generate-theme-slides', () => handleThemeSlide(requestBody));
   }
-  return handleThemeSlide(body);
+  return handleThemeSlide(requestBody);
 }
 
-async function handleThemeSlide(body: any) {
+async function handleThemeSlide(requestBody: any) {
   try {
-    const { theme, slideIndex, slides } = body;
+    const { theme, slideIndex, slides } = requestBody;
     if (!theme) return NextResponse.json({ error: 'Theme is required' }, { status: 400 });
 
     // If slides not provided, use Claude to plan them
@@ -129,8 +124,8 @@ IMPORTANT: Use the real, specific names for each item (actual place names, plane
         }),
       });
       const response = await bedrockClient.send(command);
-      const body = JSON.parse(new TextDecoder().decode(response.body));
-      const text = body.content[0].text;
+      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      const text = responseBody.content[0].text;
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (!jsonMatch) throw new Error('Failed to parse slide plan');
       const planned = JSON.parse(jsonMatch[0]);

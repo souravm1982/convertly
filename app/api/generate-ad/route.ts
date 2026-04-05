@@ -3,15 +3,10 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, BUCKET_NAME, getPresignedUrl } from '@/lib/s3';
 import { withMeter } from '@/lib/meter';
+import { getAWSConfig } from '@/lib/aws-config';
 import sharp from 'sharp';
 
-const bedrockClient = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+const bedrockClient = new BedrockRuntimeClient(getAWSConfig());
 
 const TEMPLATES: Record<string, { bgPrompt: (product: string) => string; layout: 'center' | 'left' | 'right'; accent: string }> = {
   'product-showcase': {
@@ -52,8 +47,8 @@ async function generateBackground(prompt: string): Promise<Buffer> {
     }),
   });
   const response = await bedrockClient.send(command);
-  const body = JSON.parse(new TextDecoder().decode(response.body));
-  return Buffer.from(body.images[0], 'base64');
+  const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+  return Buffer.from(responseBody.images[0], 'base64');
 }
 
 async function fetchProductImage(imageUrl: string): Promise<Buffer> {
@@ -80,8 +75,8 @@ async function removeBackground(imageBuffer: Buffer): Promise<Buffer> {
     }),
   });
   const response = await bedrockClient.send(command);
-  const body = JSON.parse(new TextDecoder().decode(response.body));
-  return Buffer.from(body.images[0], 'base64');
+  const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+  return Buffer.from(responseBody.images[0], 'base64');
 }
 
 function wrapText(text: string, maxWidth: number, fontSize: number): string[] {
@@ -171,13 +166,13 @@ function buildTextSvg(
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  return withMeter(request, 'generate-ad', () => handleGenerateAd(body));
+  const requestBody = await request.json();
+  return withMeter(request, 'generate-ad', () => handleGenerateAd(requestBody));
 }
 
-async function handleGenerateAd(body: any) {
+async function handleGenerateAd(requestBody: any) {
   try {
-    const { product, adCopy, template, removeBg = false, removePrice = false, productScale = 2.5, customBgPrompt } = body;
+    const { product, adCopy, template, removeBg = false, removePrice = false, productScale = 2.5, customBgPrompt } = requestBody;
     if (!product || !adCopy) return NextResponse.json({ error: 'Product and ad copy required' }, { status: 400 });
 
     const tmpl = TEMPLATES[template] || TEMPLATES['product-showcase'];

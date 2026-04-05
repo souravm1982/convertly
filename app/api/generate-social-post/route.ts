@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { withMeter } from '@/lib/meter';
+import { getAWSConfig } from '@/lib/aws-config';
 
-const bedrockClient = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+const bedrockClient = new BedrockRuntimeClient(getAWSConfig());
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  return withMeter(request, 'generate-social-post', () => handleSocialPost(body));
+  const requestBody = await request.json();
+  return withMeter(request, 'generate-social-post', () => handleSocialPost(requestBody));
 }
 
-async function handleSocialPost(body: any) {
+async function handleSocialPost(requestBody: any) {
   try {
-    const { product, prompt } = body;
+    const { product, prompt } = requestBody;
     const productName = product?.title || prompt;
     if (!productName) return NextResponse.json({ error: 'Product or prompt required' }, { status: 400 });
 
@@ -50,8 +45,8 @@ Return ONLY the post text, nothing else.`;
     });
 
     const response = await bedrockClient.send(command);
-    const body = JSON.parse(new TextDecoder().decode(response.body));
-    const post = body.content[0].text.trim();
+    const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+    const post = responseBody.content[0].text.trim();
 
     return NextResponse.json({ success: true, post });
   } catch (error) {
