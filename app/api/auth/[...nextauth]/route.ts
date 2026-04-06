@@ -29,6 +29,7 @@ const handler = async (req: any, res: any) => {
       try {
         secretsCache = await getSecret('nextauth-secrets');
         console.log('Secrets loaded from AWS Secrets Manager');
+        console.log('NEXTAUTH_URL from secret:', secretsCache.NEXTAUTH_URL);
       } catch (error) {
         console.error('Failed to load secrets:', error);
         throw error;
@@ -46,6 +47,8 @@ const handler = async (req: any, res: any) => {
       pages: {
         signIn: '/login',
       },
+      // This is the key fix - explicitly set the NEXTAUTH_URL
+      url: secretsCache.NEXTAUTH_URL,
     };
   }
 
