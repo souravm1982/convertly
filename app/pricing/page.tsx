@@ -45,21 +45,21 @@ export default function PricingPage() {
   return (
     <div className="min-h-screen bg-gray-50/50">
       <nav className="bg-white border-b border-gray-100 shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-16">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14 sm:h-16">
           <a href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-lg flex items-center justify-center">
-              <span className="text-white text-sm font-bold">C</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-lg flex items-center justify-center">
+              <span className="text-white text-xs sm:text-sm font-bold">C</span>
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent">Convertly</span>
+            <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent">Convertly</span>
           </a>
-          <a href="/" className="text-sm text-gray-500 hover:text-gray-700">← Back to app</a>
+          <a href="/" className="text-xs sm:text-sm text-gray-500 hover:text-gray-700">← Back to app</a>
         </div>
       </nav>
 
-      <main className="max-w-4xl mx-auto px-6 py-16">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900">Simple, transparent pricing</h1>
-          <p className="text-gray-500 mt-3 text-lg">Start free. Upgrade when you need more.</p>
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">Simple, transparent pricing</h1>
+          <p className="text-gray-500 mt-3 text-base sm:text-lg">Start free. Upgrade when you need more.</p>
         </div>
 
         {success && (
@@ -68,7 +68,7 @@ export default function PricingPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {tierStyles.map(({ key, border, bg, btn, badge }) => {
             const tier = TIERS[key as keyof typeof TIERS];
             return (
@@ -119,8 +119,8 @@ export default function PricingPage() {
           })}
         </div>
 
-        <div className="mt-16 text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
+        <div className="mt-12 sm:mt-16 text-center">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">Frequently Asked Questions</h2>
           <div className="max-w-2xl mx-auto text-left space-y-4">
             <div className="bg-white rounded-xl border border-gray-100 p-5">
               <p className="font-semibold text-gray-900">What counts as one Photo Slide generation?</p>

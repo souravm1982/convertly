@@ -151,11 +151,21 @@ export default function AdCreator({ meteredFetch }: { meteredFetch: typeof fetch
     } finally { setGeneratingAd(false); }
   };
 
-  const handleDownload = (ad: GeneratedAd) => {
-    const a = document.createElement("a");
-    a.href = `/api/download-image?key=${encodeURIComponent(ad.s3Key)}&filename=ad-${ad.template}.png`;
-    a.download = `ad-${ad.template}.png`;
-    a.click();
+  const handleDownload = async (ad: GeneratedAd) => {
+    try {
+      // For mobile, open in new tab instead of forcing download
+      if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        window.open(`/api/download-image?key=${encodeURIComponent(ad.s3Key)}&filename=ad-${ad.template}.png`, '_blank');
+      } else {
+        // Desktop: force download
+        const a = document.createElement("a");
+        a.href = `/api/download-image?key=${encodeURIComponent(ad.s3Key)}&filename=ad-${ad.template}.png`;
+        a.download = `ad-${ad.template}.png`;
+        a.click();
+      }
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
   };
 
   const filteredProducts = products.filter(p =>
@@ -164,21 +174,21 @@ export default function AdCreator({ meteredFetch }: { meteredFetch: typeof fetch
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="text-center mb-2">
-        <h2 className="text-2xl font-bold text-gray-900">Ad Creator</h2>
-        <p className="text-gray-500 mt-1">Scan a Shopify store or add your product manually.</p>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Ad Creator</h2>
+        <p className="text-sm sm:text-base text-gray-500 mt-1">Scan a Shopify store or add your product manually.</p>
       </div>
 
       {/* Source Tabs */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6 space-y-4">
         <div className="flex gap-2">
           <button onClick={() => setSourceMode("shopify")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${sourceMode === "shopify" ? "bg-violet-100 text-violet-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
+            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${sourceMode === "shopify" ? "bg-violet-100 text-violet-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
             🛍️ Shopify Store
           </button>
           <button onClick={() => setSourceMode("manual")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${sourceMode === "manual" ? "bg-violet-100 text-violet-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
+            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${sourceMode === "manual" ? "bg-violet-100 text-violet-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
             📤 Manual Upload
           </button>
         </div>
@@ -186,44 +196,44 @@ export default function AdCreator({ meteredFetch }: { meteredFetch: typeof fetch
         {sourceMode === "shopify" ? (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Shopify Store URL</label>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <input
                 type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)}
                 placeholder="e.g. mystore.myshopify.com or mystore.com"
                 onKeyDown={(e) => e.key === "Enter" && handleScrape()}
-                className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-200 focus:border-violet-300 outline-none"
+                className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-violet-200 focus:border-violet-300 outline-none text-sm sm:text-base"
               />
               <button onClick={handleScrape} disabled={scraping || !storeUrl.trim()}
-                className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-3 px-6 rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all whitespace-nowrap">
+                className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-2.5 sm:py-3 px-4 sm:px-6 rounded-lg sm:rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all whitespace-nowrap text-sm sm:text-base">
                 {scraping ? "Scanning..." : "Scan Store"}
               </button>
             </div>
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-gray-500">Product Name</label>
+                <label className="text-xs text-gray-500 block mb-1">Product Name</label>
                 <input value={manualTitle} onChange={(e) => setManualTitle(e.target.value)}
                   placeholder="e.g. Handmade Ceramic Mug"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
               </div>
               <div>
-                <label className="text-xs text-gray-500">Price</label>
+                <label className="text-xs text-gray-500 block mb-1">Price</label>
                 <input value={manualPrice} onChange={(e) => setManualPrice(e.target.value)}
                   placeholder="e.g. 29.99"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
               </div>
             </div>
             <div>
-              <label className="text-xs text-gray-500">Description</label>
+              <label className="text-xs text-gray-500 block mb-1">Description</label>
               <input value={manualDesc} onChange={(e) => setManualDesc(e.target.value)}
                 placeholder="Short product description"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
             </div>
             <div>
-              <label className="text-xs text-gray-500">Product Image *</label>
-              <div className="flex gap-3 mt-1 items-center">
+              <label className="text-xs text-gray-500 block mb-1">Product Image *</label>
+              <div className="flex flex-col sm:flex-row gap-3 mt-1">
                 {manualImagePreview ? (
                   <div className="flex items-center gap-3">
                     <img src={manualImagePreview} alt="Preview" className="w-16 h-16 object-contain rounded-lg bg-gray-50 border border-gray-100" />
@@ -235,9 +245,9 @@ export default function AdCreator({ meteredFetch }: { meteredFetch: typeof fetch
                     <input value={manualImageUrl} onChange={(e) => { setManualImageUrl(e.target.value); setManualImagePreview(e.target.value); }}
                       placeholder="Paste image URL"
                       className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
-                    <label className="bg-gray-50 hover:bg-gray-100 text-gray-600 text-sm font-medium px-4 py-2 rounded-lg border border-gray-200 cursor-pointer transition-all">
-                      Upload
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                    <label className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-sm font-medium px-4 py-2 rounded-lg border border-blue-200 cursor-pointer transition-all whitespace-nowrap flex items-center justify-center">
+                      {uploadingImage ? "Uploading..." : "Choose File"}
+                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploadingImage} />
                     </label>
                   </>
                 )}
@@ -255,22 +265,22 @@ export default function AdCreator({ meteredFetch }: { meteredFetch: typeof fetch
 
       {/* Products Grid */}
       {products.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold text-gray-900">{productCount} Products Found</h3>
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+            <h3 className="text-base sm:text-lg font-bold text-gray-900">{productCount} Products Found</h3>
             <input
               type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search products..."
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none w-48"
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none w-full sm:w-48"
             />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             {filteredProducts.map((p) => (
               <div key={p.id} onClick={() => handleSelectProduct(p)}
-                className={`cursor-pointer rounded-xl border p-3 transition-all ${selectedProduct?.id === p.id ? "ring-2 ring-violet-500 border-violet-200 bg-violet-50/50" : "border-gray-100 hover:border-gray-200"}`}>
+                className={`cursor-pointer rounded-lg sm:rounded-xl border p-2 sm:p-3 transition-all ${selectedProduct?.id === p.id ? "ring-2 ring-violet-500 border-violet-200 bg-violet-50/50" : "border-gray-100 hover:border-gray-200"}`}>
                 {p.image && <img src={p.image} alt={p.title} className="w-full aspect-square object-contain rounded-lg bg-gray-50 mb-2" />}
-                <p className="text-sm font-semibold text-gray-800 truncate">{p.title}</p>
-                <p className="text-sm text-violet-600 font-bold">${p.price}</p>
+                <p className="text-xs sm:text-sm font-semibold text-gray-800 truncate">{p.title}</p>
+                <p className="text-xs sm:text-sm text-violet-600 font-bold">${p.price}</p>
                 {p.compareAtPrice && <p className="text-xs text-gray-400 line-through">${p.compareAtPrice}</p>}
                 {p.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -287,10 +297,12 @@ export default function AdCreator({ meteredFetch }: { meteredFetch: typeof fetch
 
       {/* Ad Builder */}
       {selectedProduct && (
-        <div ref={adBuilderRef} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+        <div ref={adBuilderRef} className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6 space-y-4 sm:space-y-5">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Build Ad for: {selectedProduct.title}</h3>
-            <a href={selectedProduct.url} target="_blank" rel="noopener noreferrer" className="text-xs text-violet-500 hover:underline">{selectedProduct.url}</a>
+            <h3 className="text-base sm:text-lg font-bold text-gray-900">Build Ad for: {selectedProduct.title}</h3>
+            {selectedProduct.url && (
+              <a href={selectedProduct.url} target="_blank" rel="noopener noreferrer" className="text-xs text-violet-500 hover:underline break-all">{selectedProduct.url}</a>
+            )}
             {selectedProduct.description && (
               <p className="text-xs text-gray-400 mt-1 line-clamp-2">{selectedProduct.description}</p>
             )}
@@ -299,12 +311,12 @@ export default function AdCreator({ meteredFetch }: { meteredFetch: typeof fetch
           {/* Template Picker */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Template</label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
               {TEMPLATES.map((t) => (
                 <button key={t.id} onClick={() => setSelectedTemplate(t.id)}
-                  className={`p-3 rounded-xl border text-left transition-all ${selectedTemplate === t.id ? "ring-2 ring-violet-500 border-violet-200 bg-violet-50" : "border-gray-100 hover:border-gray-200"}`}>
-                  <span className="text-lg">{t.emoji}</span>
-                  <p className="text-sm font-semibold text-gray-800 mt-1">{t.label}</p>
+                  className={`p-2 sm:p-3 rounded-lg sm:rounded-xl border text-left transition-all ${selectedTemplate === t.id ? "ring-2 ring-violet-500 border-violet-200 bg-violet-50" : "border-gray-100 hover:border-gray-200"}`}>
+                  <span className="text-base sm:text-lg">{t.emoji}</span>
+                  <p className="text-xs sm:text-sm font-semibold text-gray-800 mt-1">{t.label}</p>
                   <p className="text-xs text-gray-400">{t.desc}</p>
                 </button>
               ))}
@@ -322,55 +334,62 @@ export default function AdCreator({ meteredFetch }: { meteredFetch: typeof fetch
           ) : adCopy && (
             <div className="space-y-3">
               <label className="block text-sm font-medium text-gray-700">Ad Copy (editable)</label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500">Headline</label>
+                  <label className="text-xs text-gray-500 block mb-1">Headline</label>
                   <input value={adCopy.headline} onChange={(e) => setAdCopy({ ...adCopy, headline: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">Subheadline</label>
+                  <label className="text-xs text-gray-500 block mb-1">Subheadline</label>
                   <input value={adCopy.subheadline} onChange={(e) => setAdCopy({ ...adCopy, subheadline: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">CTA Button</label>
+                  <label className="text-xs text-gray-500 block mb-1">CTA Button</label>
                   <input value={adCopy.cta} onChange={(e) => setAdCopy({ ...adCopy, cta: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">Description</label>
+                  <label className="text-xs text-gray-500 block mb-1">Description</label>
                   <input value={adCopy.description} onChange={(e) => setAdCopy({ ...adCopy, description: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
                 </div>
               </div>
-              <div className="flex gap-4 items-center py-2">
-                <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-                  <input type="checkbox" checked={removeBg} onChange={(e) => setRemoveBg(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
-                  Remove Background
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-                  <input type="checkbox" checked={removePrice} onChange={(e) => setRemovePrice(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
-                  Remove Price
-                </label>
-                <div className="flex items-center gap-1.5 text-sm text-gray-700">
-                  <span>Product Size</span>
+              
+              {/* Options */}
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-4 items-center py-2">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                    <input type="checkbox" checked={removeBg} onChange={(e) => setRemoveBg(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                    Remove Background
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                    <input type="checkbox" checked={removePrice} onChange={(e) => setRemovePrice(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                    Remove Price
+                  </label>
+                </div>
+                
+                <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <span>Product Size:</span>
                   <button onClick={() => setProductScale(s => Math.max(1.5, +(s - 0.5).toFixed(1)))}
-                    className="w-6 h-6 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs">▼</button>
-                  <span className="font-semibold w-8 text-center">{productScale}x</span>
+                    className="w-7 h-7 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs flex items-center justify-center">▼</button>
+                  <span className="font-semibold w-10 text-center">{productScale}x</span>
                   <button onClick={() => setProductScale(s => Math.min(3.5, +(s + 0.5).toFixed(1)))}
-                    className="w-6 h-6 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs">▲</button>
-                  <span className="text-xs text-gray-400">(2.5x rec.)</span>
+                    className="w-7 h-7 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs flex items-center justify-center">▲</button>
+                  <span className="text-xs text-gray-400">(2.5x recommended)</span>
                 </div>
               </div>
+              
               <div>
-                <label className="text-xs text-gray-500">Custom Background Prompt <span className="text-gray-400">(optional — describe the background you want)</span></label>
+                <label className="text-xs text-gray-500 block mb-1">Custom Background Prompt <span className="text-gray-400">(optional — describe the background you want)</span></label>
                 <input value={customBgPrompt} onChange={(e) => setCustomBgPrompt(e.target.value)}
                   placeholder="e.g. tropical beach sunset, rustic wooden table, neon city lights..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none mt-1" />
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-200 outline-none" />
               </div>
+              
               <button onClick={handleGenerateAd} disabled={generatingAd}
                 className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-semibold py-3 rounded-xl disabled:opacity-50 hover:shadow-lg hover:shadow-violet-200 transition-all">
                 {generatingAd ? "Generating Ad..." : "🎨 Generate Ad Image"}
@@ -382,9 +401,9 @@ export default function AdCreator({ meteredFetch }: { meteredFetch: typeof fetch
 
       {/* Generated Ads */}
       {generatedAds.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Generated Ads</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
+          <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-4">Generated Ads</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {generatedAds.map((ad, i) => (
               <div key={i} className="rounded-xl border border-gray-100 p-3">
                 <img src={ad.url} alt={`Ad ${i + 1}`} className="w-full aspect-square object-contain rounded-lg bg-gray-50" />
