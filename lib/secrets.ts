@@ -1,6 +1,9 @@
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 
-const client = new SecretsManagerClient({ region: "us-east-1" });
+const client = new SecretsManagerClient({ 
+  region: "us-east-1",
+  // Let AWS SDK auto-discover credentials from the environment
+});
 
 export async function getSecret(secretName: string) {
   try {
